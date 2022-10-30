@@ -1,0 +1,18 @@
+name: cs7643-final
+channels:
+  - pytorch
+  - nvidia
+  - defaults
+dependencies:
+  - pytorch::pytorch-cuda=11.6.0
+  - pytorch::torchvision=0.12.0
+  - pytorch::pytorch=1.11.0
+  - numpy=1.23.1
+  - pyyaml=6.0
+  - matplotlib=3.5.1
+  - scipy=1.9
+  - future=0.18
+  - captum=0.5
+  - pytest
+  - seaborn
+  - python=3.8
