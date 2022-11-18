@@ -1,7 +1,7 @@
 #Create Image, Segmentation and Mask Patches
 #From 1066 images it generated 895,440 patches
-SIZE = 300              #128
-STRIDE = 300               #32
+SIZE = 128              #128
+STRIDE = 32               #32
 DIR = ['/Stare/images/', '/Stare/labels/','/Stare/mask/',
        '/DRIVE/test/images/','/DRIVE/test/mask/',
        '/DRIVE/training/images/','/DRIVE/training/mask/',
