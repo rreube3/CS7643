@@ -340,3 +340,6 @@ third_party/glog/
 
 # Virtualenv
 venv/
+
+# Shawn notebooks
+shawn_notebooks/
