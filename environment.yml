@@ -16,3 +16,4 @@ dependencies:
   - pytest
   - seaborn
   - python=3.8
+  - opencv
