@@ -9,8 +9,8 @@
 # Took this from https://github.com/pytorch/pytorch/blob/master/.gitignore
 
 ## PyTorch
-./barlow/checkpoint/**
-./utils/Resized_Datasets/**
+./barlow/checkpoint/
+./utils/Resized_Datasets/
 .coverage
 coverage.xml
 .dmypy.json

@@ -82,7 +82,6 @@ def main_worker(gpu, args):
 
     unet = Unet(gpu)
     model = BarlowTwins(args, unet).cuda(gpu)
-    # model = nn.SyncBatchNorm.convert_sync_batchnorm(model)
     param_weights = []
     param_biases = []
     for param in model.parameters():
@@ -125,7 +124,6 @@ def main_worker(gpu, args):
             y2 = y2.cuda(gpu, non_blocking=True)
             adjust_learning_rate(args, optimizer, loader, step)
             optimizer.zero_grad()
-            # with torch.cuda.amp.autocast():
             loss = model.forward(y1, y2)
             scaler.scale(loss).backward()
             scaler.step(optimizer)
@@ -142,7 +140,7 @@ def main_worker(gpu, args):
                 state = dict(epoch=epoch + 1, model=model.state_dict(),
                              optimizer=optimizer.state_dict())
                 torch.save(state, args.checkpoint_dir / 'checkpoint.pth')
-        # save final model
+        # save model
         torch.save(model.backbone.state_dict(),
                    args.checkpoint_dir / f'{epoch}unetEncoder.pth')
 
@@ -174,12 +172,10 @@ class BarlowTwins(nn.Module):
     def __init__(self, args, unet_model):
         super().__init__()
         self.args = args
-        # self.backbone = torchvision.models.resnet50(zero_init_residual=True)
         self.backbone = unet_model.encoder
         self.backbone.fc = nn.Identity()
 
         # projector
-        # TODO: figure out appropriate initial size, probably will be smaller than 2048
         sizes = [65536] + list(map(int, args.projector.split('-')))
         layers = [nn.Flatten()]  # added flatten
         for i in range(len(sizes) - 2):
@@ -209,6 +205,10 @@ class BarlowTwins(nn.Module):
         return loss
 
 
+def exclude_bias_and_norm(p):
+    return p.ndim == 1
+
+
 class LARS(optim.Optimizer):
     def __init__(self, params, lr, weight_decay=0, momentum=0.9, eta=0.001,
                  weight_decay_filter=False, lars_adaptation_filter=False):
@@ -216,9 +216,6 @@ class LARS(optim.Optimizer):
                         eta=eta, weight_decay_filter=weight_decay_filter,
                         lars_adaptation_filter=lars_adaptation_filter)
         super().__init__(params, defaults)
-
-    def exclude_bias_and_norm(self, p):
-        return p.ndim == 1
 
     @torch.no_grad()
     def step(self):
@@ -229,10 +226,10 @@ class LARS(optim.Optimizer):
                 if dp is None:
                     continue
 
-                if not g['weight_decay_filter'] or not self.exclude_bias_and_norm(p):
+                if not g['weight_decay_filter'] or not exclude_bias_and_norm(p):
                     dp = dp.add(p, alpha=g['weight_decay'])
 
-                if not g['lars_adaptation_filter'] or not self.exclude_bias_and_norm(p):
+                if not g['lars_adaptation_filter'] or not exclude_bias_and_norm(p):
                     param_norm = torch.norm(p)
                     update_norm = torch.norm(dp)
                     one = torch.ones_like(param_norm)
@@ -260,17 +257,6 @@ class GaussianBlur(object):
             return img.filter(ImageFilter.GaussianBlur(sigma))
         else:
             return img
-
-
-# class Solarization(object):
-#     def __init__(self, p):
-#         self.p = p
-#
-#     def __call__(self, img):
-#         if random.random() < self.p:
-#             return ImageOps.solarize(img)
-#         else:
-#             return img
 
 
 class Transform:
