@@ -9,7 +9,8 @@
 # Took this from https://github.com/pytorch/pytorch/blob/master/.gitignore
 
 ## PyTorch
-
+./barlow/checkpoint/**
+./utils/Resized_Datasets/**
 .coverage
 coverage.xml
 .dmypy.json
@@ -127,7 +128,7 @@ sccache-stats*.json
 torchgen/packaged/*
 !torchgen/packaged/README.md
 
-# IPython notebook checkpoints
+# IPython notebook checkpoint
 .ipynb_checkpoints
 
 # Editor temporaries
@@ -180,7 +181,7 @@ docs/source/scripts/quantization_backend_configs/
 # Compiled MATLAB
 *.mex*
 
-# IPython notebook checkpoints
+# IPython notebook checkpoint
 .ipynb_checkpoints
 
 # Editor temporaries

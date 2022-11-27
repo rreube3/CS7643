@@ -11,18 +11,23 @@ import math
 import random
 import sys
 import time
-
+import numpy as np
 from PIL import Image, ImageOps, ImageFilter
 from torch import nn, optim
 import torch
 import torchvision
 import torchvision.transforms as transforms
 
+from model.unet import Unet
 from img_transform.transform_wrapper import TorchTransformWrapper
 from img_transform.transforms import EyeDatasetCustomTransform
+import pickle
+
+# RUN
+# --data ./../../../patched_4d_data/BarlowB/BarlowB/ --workers 1 --batch-size 64 --projector 256-256-256 --checkpoint-dir ./checkpoint/
 
 parser = argparse.ArgumentParser(description='Barlow Twins Training')
-parser.add_argument('data', type=Path, metavar='DIR',
+parser.add_argument('--data', type=Path, metavar='DIR',
                     help='path to dataset')
 parser.add_argument('--workers', default=8, type=int, metavar='N',
                     help='number of data loader workers')
@@ -40,7 +45,7 @@ parser.add_argument('--lambd', default=0.0051, type=float, metavar='L',
                     help='weight on off-diagonal terms')
 parser.add_argument('--projector', default='8192-8192-8192', type=str,
                     metavar='MLP', help='projector MLP')
-parser.add_argument('--print-freq', default=100, type=int, metavar='N',
+parser.add_argument('--print-freq', default=10, type=int, metavar='N',
                     help='print frequency')
 parser.add_argument('--checkpoint-dir', default='./checkpoint/', type=Path,
                     metavar='DIR', help='path to checkpoint directory')
@@ -50,19 +55,21 @@ def main():
     args = parser.parse_args()
     # removed SLURM node setup we won't be using
 
-    # single-node distributed training
+    # single-node training
     args.rank = 0
     args.dist_url = 'tcp://localhost:58472'
     args.world_size = torch.cuda.device_count()
-    torch.multiprocessing.spawn(main_worker, (args,), args.ngpus_per_node)
+    args.ngpus_per_node = args.world_size
+    main_worker(torch.cuda.current_device(), args)
+
+
+def pickle_loader(path) -> np.ndarray:
+    with open(path, 'rb') as p:
+        return pickle.load(p)
 
 
 def main_worker(gpu, args):
     args.rank += gpu
-    torch.distributed.init_process_group(
-        backend='nccl', init_method=args.dist_url,
-        world_size=args.world_size, rank=args.rank
-    )
 
     if args.rank == 0:
         args.checkpoint_dir.mkdir(parents=True, exist_ok=True)
@@ -73,8 +80,9 @@ def main_worker(gpu, args):
     torch.cuda.set_device(gpu)
     torch.backends.cudnn.benchmark = True
 
-    model = BarlowTwins(args).cuda(gpu)
-    model = nn.SyncBatchNorm.convert_sync_batchnorm(model)
+    unet = Unet(gpu)
+    model = BarlowTwins(args, unet).cuda(gpu)
+    # model = nn.SyncBatchNorm.convert_sync_batchnorm(model)
     param_weights = []
     param_biases = []
     for param in model.parameters():
@@ -83,7 +91,6 @@ def main_worker(gpu, args):
         else:
             param_weights.append(param)
     parameters = [{'params': param_weights}, {'params': param_biases}]
-    model = torch.nn.parallel.DistributedDataParallel(model, device_ids=[gpu])
     optimizer = LARS(parameters, lr=0, weight_decay=args.weight_decay,
                      weight_decay_filter=True,
                      lars_adaptation_filter=True)
@@ -98,49 +105,46 @@ def main_worker(gpu, args):
     else:
         start_epoch = 0
 
-    # TODO: load data with Shawn's transforms rather than Transform()
-    # TODO: re-org file structure to all combined with train test split
-    # TODO: apply masks to images base version so we don't have to do that in transforms?
-    dataset = torchvision.datasets.ImageFolder(args.data / 'train', Transform())
-    sampler = torch.utils.data.distributed.DistributedSampler(dataset)
+    dataset = torchvision.datasets.ImageFolder(
+        args.data,
+        Transform(),
+        loader=pickle_loader,
+        is_valid_file=lambda path: ".pickle" in path
+    )
     assert args.batch_size % args.world_size == 0
     per_device_batch_size = args.batch_size // args.world_size
     loader = torch.utils.data.DataLoader(
         dataset, batch_size=per_device_batch_size, num_workers=args.workers,
-        pin_memory=True, sampler=sampler)
+        pin_memory=True)
 
     start_time = time.time()
     scaler = torch.cuda.amp.GradScaler()
     for epoch in range(start_epoch, args.epochs):
-        sampler.set_epoch(epoch)
         for step, ((y1, y2), _) in enumerate(loader, start=epoch * len(loader)):
             y1 = y1.cuda(gpu, non_blocking=True)
             y2 = y2.cuda(gpu, non_blocking=True)
             adjust_learning_rate(args, optimizer, loader, step)
             optimizer.zero_grad()
-            with torch.cuda.amp.autocast():
-                loss = model.forward(y1, y2)
+            # with torch.cuda.amp.autocast():
+            loss = model.forward(y1, y2)
             scaler.scale(loss).backward()
             scaler.step(optimizer)
             scaler.update()
             if step % args.print_freq == 0:
-                if args.rank == 0:
-                    stats = dict(epoch=epoch, step=step,
-                                 lr_weights=optimizer.param_groups[0]['lr'],
-                                 lr_biases=optimizer.param_groups[1]['lr'],
-                                 loss=loss.item(),
-                                 time=int(time.time() - start_time))
-                    print(json.dumps(stats))
-                    print(json.dumps(stats), file=stats_file)
-        if args.rank == 0:
-            # save checkpoint
-            state = dict(epoch=epoch + 1, model=model.state_dict(),
-                         optimizer=optimizer.state_dict())
-            torch.save(state, args.checkpoint_dir / 'checkpoint.pth')
-    if args.rank == 0:
+                stats = dict(epoch=epoch, step=step,
+                             lr_weights=optimizer.param_groups[0]['lr'],
+                             lr_biases=optimizer.param_groups[1]['lr'],
+                             loss=loss.item(),
+                             time=int(time.time() - start_time))
+                print(json.dumps(stats))
+                print(json.dumps(stats), file=stats_file)
+                # save checkpoint
+                state = dict(epoch=epoch + 1, model=model.state_dict(),
+                             optimizer=optimizer.state_dict())
+                torch.save(state, args.checkpoint_dir / 'checkpoint.pth')
         # save final model
-        torch.save(model.module.backbone.state_dict(),
-                   args.checkpoint_dir / 'unetEncoder.pth')
+        torch.save(model.backbone.state_dict(),
+                   args.checkpoint_dir / f'{epoch}unetEncoder.pth')
 
 
 def adjust_learning_rate(args, optimizer, loader, step):
@@ -176,8 +180,8 @@ class BarlowTwins(nn.Module):
 
         # projector
         # TODO: figure out appropriate initial size, probably will be smaller than 2048
-        sizes = [2048] + list(map(int, args.projector.split('-')))
-        layers = []
+        sizes = [65536] + list(map(int, args.projector.split('-')))
+        layers = [nn.Flatten()]  # added flatten
         for i in range(len(sizes) - 2):
             layers.append(nn.Linear(sizes[i], sizes[i + 1], bias=False))
             layers.append(nn.BatchNorm1d(sizes[i + 1]))
@@ -189,15 +193,15 @@ class BarlowTwins(nn.Module):
         self.bn = nn.BatchNorm1d(sizes[-1], affine=False)
 
     def forward(self, y1, y2):
-        z1 = self.projector(self.backbone(y1))
-        z2 = self.projector(self.backbone(y2))
+        z1 = self.projector(self.backbone(y1)[0])
+        z2 = self.projector(self.backbone(y2)[0])
 
         # empirical cross-correlation matrix
         c = self.bn(z1).T @ self.bn(z2)
 
         # sum the cross-correlation matrix between all gpus
         c.div_(self.args.batch_size)
-        torch.distributed.all_reduce(c)
+        # torch.distributed.all_reduce(c)
 
         on_diag = torch.diagonal(c).add_(-1).pow_(2).sum()
         off_diag = off_diagonal(c).pow_(2).sum()
@@ -212,7 +216,6 @@ class LARS(optim.Optimizer):
                         eta=eta, weight_decay_filter=weight_decay_filter,
                         lars_adaptation_filter=lars_adaptation_filter)
         super().__init__(params, defaults)
-
 
     def exclude_bias_and_norm(self, p):
         return p.ndim == 1
@@ -247,7 +250,6 @@ class LARS(optim.Optimizer):
                 p.add_(mu, alpha=-g['lr'])
 
 
-
 class GaussianBlur(object):
     def __init__(self, p):
         self.p = p
@@ -260,15 +262,15 @@ class GaussianBlur(object):
             return img
 
 
-class Solarization(object):
-    def __init__(self, p):
-        self.p = p
-
-    def __call__(self, img):
-        if random.random() < self.p:
-            return ImageOps.solarize(img)
-        else:
-            return img
+# class Solarization(object):
+#     def __init__(self, p):
+#         self.p = p
+#
+#     def __call__(self, img):
+#         if random.random() < self.p:
+#             return ImageOps.solarize(img)
+#         else:
+#             return img
 
 
 class Transform:
@@ -283,8 +285,8 @@ class Transform:
                 p=0.8
             )),
             TorchTransformWrapper(transforms.RandomGrayscale(p=0.2)),
-            TorchTransformWrapper(GaussianBlur(p=1.0)),
-            TorchTransformWrapper(Solarization(p=0.0)),
+            TorchTransformWrapper(transforms.RandomSolarize(0.5, 0)),
+            TorchTransformWrapper(transforms.GaussianBlur(5, 0.5)),
             TorchTransformWrapper(transforms.Normalize(mean=[0.485, 0.456, 0.406], std=[0.229, 0.224, 0.225]))
         ])
         self.transform_prime = transforms.Compose([
@@ -297,8 +299,11 @@ class Transform:
                 p=0.8
             )),
             TorchTransformWrapper(transforms.RandomGrayscale(p=0.2)),
-            TorchTransformWrapper(GaussianBlur(p=0.1)),
-            TorchTransformWrapper(Solarization(p=0.2)),
+            TorchTransformWrapper(transforms.RandomApply(
+                [transforms.GaussianBlur(5, 0.5)],
+                p=0.1
+            )),
+            TorchTransformWrapper(transforms.RandomSolarize(0.5, 0.2)),
             TorchTransformWrapper(transforms.Normalize(mean=[0.485, 0.456, 0.406], std=[0.229, 0.224, 0.225]))
         ])
 
