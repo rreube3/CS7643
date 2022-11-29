@@ -28,11 +28,11 @@ class ConvBlock(nn.Module):
         # Or is this only for image sizes of powers of 2?
         super().__init__()
         # A convolutional block is Conv2d -> BatchNorm2d -> ReLU -> Conv2d -> BatchNorm2d -> ReLU
-        self.conv_1 = nn.Conv2d(num_channels_in, num_channels_out, kernel_size=kernel_size, padding=padding).cuda(device)
-        self.batch_norm_1 = nn.BatchNorm2d(num_channels_out).cuda(device)
+        self.conv_1 = nn.Conv2d(num_channels_in, num_channels_out, kernel_size=kernel_size, padding=padding)
+        self.batch_norm_1 = nn.BatchNorm2d(num_channels_out)
         self.relu_1 = nn.ReLU()
-        self.conv_2 = nn.Conv2d(num_channels_out, num_channels_out, kernel_size=kernel_size, padding=padding).cuda(device)
-        self.batch_norm_2 = nn.BatchNorm2d(num_channels_out).cuda(device)
+        self.conv_2 = nn.Conv2d(num_channels_out, num_channels_out, kernel_size=kernel_size, padding=padding)
+        self.batch_norm_2 = nn.BatchNorm2d(num_channels_out)
         self.relu_2 = nn.ReLU()
 
     def forward(self, x: torch.Tensor) -> torch.Tensor:
@@ -65,7 +65,7 @@ class UnetEncoder(nn.Module):
         """
         super().__init__()
         # Create the convolutional blocks
-        self.conv_blocks = []
+        self.conv_blocks = nn.ModuleList()
         cur_num_in_channels = num_channels_in
         for cur_num_out_channels in hidden_channels:
             self.conv_blocks.append(ConvBlock(device, cur_num_in_channels,
@@ -74,7 +74,7 @@ class UnetEncoder(nn.Module):
                                               padding=padding))
             cur_num_in_channels = cur_num_out_channels
         # Create the max pooling layer
-        self.max_pool = nn.MaxPool2d(kernel_size=DECONV_KERNEL_SIZE, stride=DECONV_STRIDE).cuda(device)
+        self.max_pool = nn.MaxPool2d(kernel_size=DECONV_KERNEL_SIZE, stride=DECONV_STRIDE)
 
     def forward(self, x: torch.Tensor) -> (torch.Tensor, List):
         """
@@ -112,7 +112,7 @@ class DeconvBlock(nn.Module):
         self.conv_transpose = nn.ConvTranspose2d(num_channels_in,
                                                  num_channels_out,
                                                  kernel_size=DECONV_KERNEL_SIZE,
-                                                 stride=DECONV_STRIDE).cuda(device)
+                                                 stride=DECONV_STRIDE)
         self.conv_block = ConvBlock(device, int(DECONV_KERNEL_SIZE * num_channels_out), num_channels_out)
 
     def forward(self, x: torch.Tensor, skip_tensor: torch.Tensor) -> torch.Tensor:
@@ -140,7 +140,7 @@ class UnetDecoder(nn.Module):
         :param hidden_channels: Number of channels for each convolutional block of the U-Net
         """
         super().__init__()
-        self.deconv_blocks = []
+        self.deconv_blocks = nn.ModuleList()
         cur_num_out_channels = hidden_channels[0]
         for cur_num_in_channels in hidden_channels[1:]:
             self.deconv_blocks.append(DeconvBlock(device, cur_num_in_channels,
@@ -193,7 +193,7 @@ class Unet(nn.Module):
         self.classifier = nn.Conv2d(in_channels=hidden_channels[0],
                                     out_channels=num_classes,
                                     kernel_size=kernel_size,
-                                    padding=padding).cuda(device)
+                                    padding=padding)
 
     def forward(self, x: torch.Tensor) -> torch.Tensor:
         """

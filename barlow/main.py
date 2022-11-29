@@ -141,6 +141,7 @@ def main_worker(gpu, args):
                              optimizer=optimizer.state_dict())
                 torch.save(state, args.checkpoint_dir / 'checkpoint.pth')
         # save model
+        # TODO: This should be model.encoder instead of model.backbone (a RESNET term)
         torch.save(model.backbone.state_dict(),
                    args.checkpoint_dir / f'{epoch}unetEncoder.pth')
 

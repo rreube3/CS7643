@@ -9,6 +9,8 @@
 # Took this from https://github.com/pytorch/pytorch/blob/master/.gitignore
 
 ## PyTorch
+data/
+checkpoint/
 ./barlow/checkpoint/
 ./utils/Resized_Datasets/
 .coverage
