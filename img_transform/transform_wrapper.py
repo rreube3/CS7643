@@ -7,7 +7,7 @@ class TorchTransformWrapper(torch.nn.Module):
         self._transform = transform
         self._max_pixel_value = max_pixel_value
 
-    def __call__(self, x: torch.Tensor, apply_mask: bool) -> torch.Tensor:
+    def __call__(self, x: torch.Tensor, apply_mask: bool = True) -> torch.Tensor:
         """
         Calls the wrapped transform
         

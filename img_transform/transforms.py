@@ -20,9 +20,10 @@ class EyeDatasetCustomTransform(torch.nn.Module):
             batched = False
             x = x.unsqueeze(0)
 
-        x = x.permute([0, 3, 1, 2])
+        # don't need this
+        # x = x.permute([0, 3, 1, 2])
         x /= self._max_pixel_value
-        x[:, -1, :, :] = x[:, -1, :, :] >= self._mask_threshold
+        x[:, -1, :, :] = (x[:, -1, :, :] >= self._mask_threshold).float()
 
         if not batched:
             x = x.squeeze(0)
