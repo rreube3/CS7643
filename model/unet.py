@@ -11,7 +11,6 @@ DECONV_STRIDE = 2
 class ConvBlock(nn.Module):
     """U-Net Convolutional Block"""
     def __init__(self,
-                 device,
                  num_channels_in: int,
                  num_channels_out: int,
                  kernel_size: int = 3,
@@ -50,7 +49,6 @@ class ConvBlock(nn.Module):
 class UnetEncoder(nn.Module):
     """U-Net Encoder"""
     def __init__(self,
-                 device,
                  num_channels_in: int = 3,
                  hidden_channels: List = (64, 128, 256, 512, 1024),
                  kernel_size: int = 3,
@@ -68,7 +66,7 @@ class UnetEncoder(nn.Module):
         self.conv_blocks = nn.ModuleList()
         cur_num_in_channels = num_channels_in
         for cur_num_out_channels in hidden_channels:
-            self.conv_blocks.append(ConvBlock(device, cur_num_in_channels,
+            self.conv_blocks.append(ConvBlock(cur_num_in_channels,
                                               cur_num_out_channels,
                                               kernel_size=kernel_size,
                                               padding=padding))
@@ -98,7 +96,6 @@ class UnetEncoder(nn.Module):
 class DeconvBlock(nn.Module):
     """U-Net Deconv Block"""
     def __init__(self,
-                 device,
                  num_channels_in: int,
                  num_channels_out: int,
                  ):
@@ -113,7 +110,7 @@ class DeconvBlock(nn.Module):
                                                  num_channels_out,
                                                  kernel_size=DECONV_KERNEL_SIZE,
                                                  stride=DECONV_STRIDE)
-        self.conv_block = ConvBlock(device, int(DECONV_KERNEL_SIZE * num_channels_out), num_channels_out)
+        self.conv_block = ConvBlock(int(DECONV_KERNEL_SIZE * num_channels_out), num_channels_out)
 
     def forward(self, x: torch.Tensor, skip_tensor: torch.Tensor) -> torch.Tensor:
         """
@@ -132,7 +129,6 @@ class DeconvBlock(nn.Module):
 class UnetDecoder(nn.Module):
     """U-Net Decoder"""
     def __init__(self,
-                 device,
                  hidden_channels: List = (64, 128, 256, 512, 1024)):
         """
         Initialize the U-Net Decoder
@@ -143,7 +139,7 @@ class UnetDecoder(nn.Module):
         self.deconv_blocks = nn.ModuleList()
         cur_num_out_channels = hidden_channels[0]
         for cur_num_in_channels in hidden_channels[1:]:
-            self.deconv_blocks.append(DeconvBlock(device, cur_num_in_channels,
+            self.deconv_blocks.append(DeconvBlock(cur_num_in_channels,
                                                   cur_num_out_channels))
             cur_num_out_channels = cur_num_in_channels
 
@@ -165,7 +161,6 @@ class UnetDecoder(nn.Module):
 class Unet(nn.Module):
     """U-Net!"""
     def __init__(self,
-                 device,
                  num_channels_in: int = 4,
                  num_classes: int = 1,
                  hidden_channels: List = (64, 128, 256, 512, 1024),
@@ -182,12 +177,12 @@ class Unet(nn.Module):
         """
         super().__init__()
         # Create the encoder
-        self.encoder = UnetEncoder(device, num_channels_in=num_channels_in,
+        self.encoder = UnetEncoder(num_channels_in=num_channels_in,
                                    hidden_channels=hidden_channels,
                                    kernel_size=kernel_size,
                                    padding=padding)
         # Create the decoder
-        self.decoder = UnetDecoder(device, hidden_channels=hidden_channels)
+        self.decoder = UnetDecoder(hidden_channels=hidden_channels)
 
         # Output layer
         self.classifier = nn.Conv2d(in_channels=hidden_channels[0],
