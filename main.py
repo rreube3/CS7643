@@ -115,9 +115,10 @@ if __name__ == '__main__':
                         metavar='DIR', help='path to checkpoint directory')
     parser.add_argument('--load-encoder-weights', default=None, type=Path,
                         metavar='DIR', help='Weights to load for the encoder')
+    parser.add_argument('--load-bt-checkpoint', default=None, type=Path,
+                        metavar='DIR', help='Checkpoint weights to load for the encoder')
     parser.add_argument('--save-freq', default=5, type=int,
                         metavar='N', help='How frequent to save')
-    # TODO Add loading of all weights
     
     args = parser.parse_args()
 
@@ -127,8 +128,11 @@ if __name__ == '__main__':
         device = "cuda:0"
 
     # Initialize the model on the GPU
-    model = Unet(torch.cuda.current_device()).to(device)
-    # TODO: Reload parameters
+    model = Unet().to(device)
+    if args.load_encoder_weights:
+        model.encoder.load_state_dict(torch.load(args.load_encoder_weights))
+    elif args.load_bt_checkpoint:
+        model.encoder.load_state_dict(torch.load(args.load_bt_checkpoint)["encoder"])
     optimizer = torch.optim.Adam(model.parameters(), lr=args.learning_rate)
     criterion = torch.nn.BCEWithLogitsLoss()
 
