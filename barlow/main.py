@@ -80,7 +80,7 @@ def main_worker(gpu, args):
     torch.cuda.set_device(gpu)
     torch.backends.cudnn.benchmark = True
 
-    unet = Unet(gpu)
+    unet = Unet()
     model = BarlowTwins(args, unet).cuda(gpu)
     param_weights = []
     param_biases = []
@@ -138,11 +138,10 @@ def main_worker(gpu, args):
                 print(json.dumps(stats), file=stats_file)
                 # save checkpoint
                 state = dict(epoch=epoch + 1, model=model.state_dict(),
-                             optimizer=optimizer.state_dict())
+                             encoder=model.encoder.state_dict(), optimizer=optimizer.state_dict())
                 torch.save(state, args.checkpoint_dir / 'checkpoint.pth')
         # save model
-        # TODO: This should be model.encoder instead of model.backbone (a RESNET term)
-        torch.save(model.backbone.state_dict(),
+        torch.save(model.encoder.state_dict(),
                    args.checkpoint_dir / f'{epoch}unetEncoder.pth')
 
 
@@ -173,8 +172,7 @@ class BarlowTwins(nn.Module):
     def __init__(self, args, unet_model):
         super().__init__()
         self.args = args
-        self.backbone = unet_model.encoder
-        self.backbone.fc = nn.Identity()
+        self.encoder = unet_model.encoder
 
         # projector
         sizes = [65536] + list(map(int, args.projector.split('-')))
@@ -190,8 +188,8 @@ class BarlowTwins(nn.Module):
         self.bn = nn.BatchNorm1d(sizes[-1], affine=False)
 
     def forward(self, y1, y2):
-        z1 = self.projector(self.backbone(y1)[0])
-        z2 = self.projector(self.backbone(y2)[0])
+        z1 = self.projector(self.encoder(y1)[0])
+        z2 = self.projector(self.encoder(y2)[0])
 
         # empirical cross-correlation matrix
         c = self.bn(z1).T @ self.bn(z2)
