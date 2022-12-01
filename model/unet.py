@@ -2,7 +2,6 @@ import torch
 import torch.nn as nn
 from typing import List
 
-
 # Per https://arxiv.org/pdf/1505.04597.pdf stride = 2, kernel_size = 2
 DECONV_KERNEL_SIZE = 2
 DECONV_STRIDE = 2
@@ -10,6 +9,7 @@ DECONV_STRIDE = 2
 
 class ConvBlock(nn.Module):
     """U-Net Convolutional Block"""
+
     def __init__(self,
                  num_channels_in: int,
                  num_channels_out: int,
@@ -48,11 +48,13 @@ class ConvBlock(nn.Module):
 
 class UnetEncoder(nn.Module):
     """U-Net Encoder"""
+
     def __init__(self,
                  num_channels_in: int = 3,
                  hidden_channels: List = (64, 128, 256, 512, 1024),
                  kernel_size: int = 3,
-                 padding: int = 1):
+                 padding: int = 1,
+                 dropout: float = 0.2):
         """
         Initialize U-Net Encoder
 
@@ -71,6 +73,7 @@ class UnetEncoder(nn.Module):
                                               kernel_size=kernel_size,
                                               padding=padding))
             cur_num_in_channels = cur_num_out_channels
+        self.dropper = nn.Dropout2d(p=dropout)
         # Create the max pooling layer
         self.max_pool = nn.MaxPool2d(kernel_size=DECONV_KERNEL_SIZE, stride=DECONV_STRIDE)
 
@@ -90,11 +93,12 @@ class UnetEncoder(nn.Module):
             if i < len(self.conv_blocks) - 1:
                 x = self.max_pool(x)
 
-        return x, skip_connections
+        return self.dropper(x), skip_connections
 
 
 class DeconvBlock(nn.Module):
     """U-Net Deconv Block"""
+
     def __init__(self,
                  num_channels_in: int,
                  num_channels_out: int,
@@ -128,6 +132,7 @@ class DeconvBlock(nn.Module):
 
 class UnetDecoder(nn.Module):
     """U-Net Decoder"""
+
     def __init__(self,
                  hidden_channels: List = (64, 128, 256, 512, 1024)):
         """
@@ -160,12 +165,14 @@ class UnetDecoder(nn.Module):
 
 class Unet(nn.Module):
     """U-Net!"""
+
     def __init__(self,
                  num_channels_in: int = 4,
                  num_classes: int = 1,
                  hidden_channels: List = (64, 128, 256, 512, 1024),
                  kernel_size: int = 3,
-                 padding: int = 1):
+                 padding: int = 1,
+                 dropout: float = 0.2):
         """
         Initialize U-Net Convolutional block
 
@@ -180,7 +187,8 @@ class Unet(nn.Module):
         self.encoder = UnetEncoder(num_channels_in=num_channels_in,
                                    hidden_channels=hidden_channels,
                                    kernel_size=kernel_size,
-                                   padding=padding)
+                                   padding=padding,
+                                   dropout=dropout)
         # Create the decoder
         self.decoder = UnetDecoder(hidden_channels=hidden_channels)
 

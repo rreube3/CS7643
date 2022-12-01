@@ -122,6 +122,7 @@ if __name__ == '__main__':
                         metavar='N', help='How frequent to save')
     parser.add_argument('--loss-function', nargs=1,
                         choices=['BCEWithLogitsLoss', 'CrossEntropyLoss', 'DiceLoss', 'DiceBCELoss'])
+    parser.add_argument('--dropout', default=0.2, type=float, help='dropout percent used in Unet Encoder')
     
     args = parser.parse_args()
 
@@ -131,7 +132,7 @@ if __name__ == '__main__':
         device = "cuda:0"
 
     # Initialize the model on the GPU
-    model = Unet().to(device)
+    model = Unet(dropout=args.dropout).to(device)
     if args.load_encoder_weights:
         model.encoder.load_state_dict(torch.load(args.load_encoder_weights))
     elif args.load_bt_checkpoint:
