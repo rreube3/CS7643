@@ -73,9 +73,9 @@ class UnetEncoder(nn.Module):
                                               kernel_size=kernel_size,
                                               padding=padding))
             cur_num_in_channels = cur_num_out_channels
-        self.dropper = nn.Dropout2d(p=dropout)
         # Create the max pooling layer
         self.max_pool = nn.MaxPool2d(kernel_size=DECONV_KERNEL_SIZE, stride=DECONV_STRIDE)
+        self.dropper = nn.Dropout2d(p=dropout)
 
     def forward(self, x: torch.Tensor) -> (torch.Tensor, List):
         """
