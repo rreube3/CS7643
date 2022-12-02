@@ -28,3 +28,8 @@ https://mega.nz/file/yaZlGL6D#l2_lojZHcMVXZelzbERsXzLVxl6cy-ElY5sRyWXkRP4
 --> README.md  
 --> environment.yml  
 --> notebooks/ 
+
+## Running UNET
+
+1. `set PYTHONPATH=.` or `export PYTHONPATH=${PWD}`
+2. `python main.py --rootdir .\data\DATA_4D_Patches\DATA_4D_Patches\ --workers 24 --epochs 5`
