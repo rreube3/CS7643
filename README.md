@@ -14,7 +14,7 @@ https://mega.nz/file/yaZlGL6D#l2_lojZHcMVXZelzbERsXzLVxl6cy-ElY5sRyWXkRP4
 
 ## Setup instructions
 1. git clone git@github.com:rreube3/CS7643.git
-2. conda create env -f environment.yml
+2. conda env create -f environment.yml
 3. conda activate cs7643-final
 4. run test-env.py
 
@@ -28,3 +28,10 @@ https://mega.nz/file/yaZlGL6D#l2_lojZHcMVXZelzbERsXzLVxl6cy-ElY5sRyWXkRP4
 --> README.md  
 --> environment.yml  
 --> notebooks/ 
+
+## Running UNET
+
+0. `cd <code dir>`
+1. `conda activate cd7643-final`
+2. `set PYTHONPATH=.` or `export PYTHONPATH=${PWD}`
+3. `python main.py --rootdir .\data\DATA_4D_Patches\DATA_4D_Patches\ --workers 24 --epochs 5`

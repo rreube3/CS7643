@@ -10,6 +10,7 @@ from tqdm import tqdm
 
 from img_transform.transforms import EyeMaskCustomTransform, EyeDatasetCustomTransform
 from model.unet import Unet
+from model.dice_loss import DiceLoss, DiceBCELoss
 
 
 IMG_TRANSFORMS = transforms.Compose([
@@ -119,6 +120,8 @@ if __name__ == '__main__':
                         metavar='DIR', help='Checkpoint weights to load for the encoder')
     parser.add_argument('--save-freq', default=5, type=int,
                         metavar='N', help='How frequent to save')
+    parser.add_argument('--loss-function', nargs=1,
+                        choices=['BCEWithLogitsLoss', 'CrossEntropyLoss', 'DiceLoss', 'DiceBCELoss'])
     
     args = parser.parse_args()
 
@@ -134,7 +137,15 @@ if __name__ == '__main__':
     elif args.load_bt_checkpoint:
         model.encoder.load_state_dict(torch.load(args.load_bt_checkpoint)["encoder"])
     optimizer = torch.optim.Adam(model.parameters(), lr=args.learning_rate)
-    criterion = torch.nn.BCEWithLogitsLoss()
+
+    # Select the Loss function
+    loss_functions = {
+        "BCEWithLogitsLoss": torch.nn.BCEWithLogitsLoss(),
+        "CrossEntropyLoss": torch.nn.CrossEntropyLoss(),
+        "DiceLoss": DiceLoss(),
+        "DiceBCELoss": DiceBCELoss()
+    }
+    criterion = loss_functions[args.loss_function[0]]
 
     # Load the training datasets
     training_path = os.path.join(args.rootdir, "Training")
