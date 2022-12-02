@@ -134,7 +134,8 @@ class UnetDecoder(nn.Module):
     """U-Net Decoder"""
 
     def __init__(self,
-                 hidden_channels: List = (64, 128, 256, 512, 1024)):
+                 hidden_channels: List = (64, 128, 256, 512, 1024),
+                 dropout: float = 0.2):
         """
         Initialize the U-Net Decoder
 
@@ -147,6 +148,7 @@ class UnetDecoder(nn.Module):
             self.deconv_blocks.append(DeconvBlock(cur_num_in_channels,
                                                   cur_num_out_channels))
             cur_num_out_channels = cur_num_in_channels
+        self.dropper = nn.Dropout2d(p=dropout)
 
     def forward(self, x: torch.Tensor, skip_connections: List) -> torch.Tensor:
         """
@@ -160,7 +162,7 @@ class UnetDecoder(nn.Module):
         for i in range(len(self.deconv_blocks) - 1, -1, -1):
             x = self.deconv_blocks[i](x, skip_connections[i])
 
-        return x
+        return self.dropper(x)
 
 
 class Unet(nn.Module):
@@ -190,7 +192,8 @@ class Unet(nn.Module):
                                    padding=padding,
                                    dropout=dropout)
         # Create the decoder
-        self.decoder = UnetDecoder(hidden_channels=hidden_channels)
+        self.decoder = UnetDecoder(hidden_channels=hidden_channels,
+                                   dropout=dropout)
 
         # Output layer
         self.classifier = nn.Conv2d(in_channels=hidden_channels[0],
