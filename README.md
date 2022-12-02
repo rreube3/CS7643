@@ -35,3 +35,4 @@ https://mega.nz/file/yaZlGL6D#l2_lojZHcMVXZelzbERsXzLVxl6cy-ElY5sRyWXkRP4
 1. `conda activate cd7643-final`
 2. `set PYTHONPATH=.` or `export PYTHONPATH=${PWD}`
 3. `python main.py --rootdir .\data\DATA_4D_Patches\DATA_4D_Patches\ --workers 24 --epochs 5`
+4. `Scotts Mess!!'
