@@ -123,6 +123,12 @@ if __name__ == '__main__':
     parser.add_argument('--loss-function', nargs=1,
                         choices=['BCEWithLogitsLoss', 'CrossEntropyLoss', 'DiceLoss', 'DiceBCELoss'])
     parser.add_argument('--dropout', default=0.2, type=float, help='dropout percent used in Unet Encoder')
+    parser.add_argument('--scheduler', nargs=1, default='Fixed',
+                        choices=['Fixed', 'CosineAnnealing', 'ReduceOnPlateau'])
+    parser.add_argument('--anneal_tmax', default=10, type=int,
+                        help='Cosine Annealing: Maximum number of iterations for cosine annealing')
+    parser.add_argument('--anneal_eta', default=0, type=float,
+                        help='Cosine Annealing: Minimum learning rate. Default: 0')
     
     args = parser.parse_args()
 
@@ -138,6 +144,13 @@ if __name__ == '__main__':
     elif args.load_bt_checkpoint:
         model.encoder.load_state_dict(torch.load(args.load_bt_checkpoint)["encoder"])
     optimizer = torch.optim.Adam(model.parameters(), lr=args.learning_rate)
+
+    # Define scheduler (if necessary)
+    scheduler = None
+    if args.scheduler[0] == 'CosineAnnealing':
+        scheduler = torch.optim.lr_scheduler.CosineAnnealingLR(optimizer, args.anneal_tmax, args.anneal_eta)
+    elif args.scheduler[0] == 'ReduceOnPlateau':
+        scheduler = torch.optim.lr_scheduler.ReduceLROnPlateau(optimizer)
 
     # Select the Loss function
     loss_functions = {
@@ -179,6 +192,11 @@ if __name__ == '__main__':
         epoch_pbar.write("Validation Loss : {:.4f}".format(validation_loss))
         epoch_pbar.write("=" * 80)
         epoch_pbar.update(1)
+        # Take appropriate scheduler step (if necessary)
+        if args.scheduler[0] == 'CosineAnnealing':
+            scheduler.step()
+        elif args.scheduler[0] == 'ReduceOnPlateau':
+            scheduler.step(validation_loss)
 
         if i % args.save_freq == 0:
             # save the model
