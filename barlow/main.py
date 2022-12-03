@@ -49,6 +49,10 @@ parser.add_argument('--print-freq', default=10, type=int, metavar='N',
                     help='print frequency')
 parser.add_argument('--checkpoint-dir', default='./checkpoint/', type=Path,
                     metavar='DIR', help='path to checkpoint directory')
+parser.add_argument('--dropout', default=0.2, type=float,
+                    help='dropout percent used in Unet Encoder')
+parser.add_argument('--unet-layers', default=None, type=str,
+                    help='Layer sizes for the U-Net as a string l1-l2-l3-...-ln')
 
 
 def main():
@@ -80,7 +84,18 @@ def main_worker(gpu, args):
     torch.cuda.set_device(gpu)
     torch.backends.cudnn.benchmark = True
 
-    unet = Unet()
+    # Determine the layer sizes of the U-Net
+    unet_layers = DEFAULT_UNET_LAYERS
+    if args.unet_layers:
+        unet_layers = [int(x) for x in args.unet_layers.split("-")]
+
+    # Determine the layer sizes of the U-Net
+    unet_layers = DEFAULT_UNET_LAYERS
+    if args.unet_layers:
+        unet_layers = [int(x) for x in args.unet_layers.split("-")]
+
+    # Initialize the model on the GPU
+    unet = Unet(dropout=args.dropout, hidden_channels=unet_layers)
     model = BarlowTwins(args, unet).cuda(gpu)
     param_weights = []
     param_biases = []
@@ -138,10 +153,12 @@ def main_worker(gpu, args):
                 print(json.dumps(stats), file=stats_file)
                 # save checkpoint
                 state = dict(epoch=epoch + 1, model=model.state_dict(),
-                             encoder=model.encoder.state_dict(), optimizer=optimizer.state_dict())
+                             encoder=model.encoder.state_dict(), optimizer=optimizer.state_dict(),
+                             unet_layer_sizes=unet_layers,
+                             args=dict(args._get_kwargs()))
                 torch.save(state, args.checkpoint_dir / 'checkpoint.pth')
         # save model
-        torch.save(model.encoder.state_dict(),
+        torch.save(state,
                    args.checkpoint_dir / f'{epoch}unetEncoder.pth')
 
 
