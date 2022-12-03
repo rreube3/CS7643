@@ -9,7 +9,7 @@ from pathlib import Path
 from tqdm import tqdm
 
 from img_transform.transforms import EyeMaskCustomTransform, EyeDatasetCustomTransform
-from model.unet import Unet
+from model.unet import Unet, DEFAULT_UNET_LAYERS
 from model.dice_loss import DiceLoss, DiceBCELoss
 
 
@@ -123,6 +123,7 @@ if __name__ == '__main__':
     parser.add_argument('--loss-function', nargs=1,
                         choices=['BCEWithLogitsLoss', 'CrossEntropyLoss', 'DiceLoss', 'DiceBCELoss'])
     parser.add_argument('--dropout', default=0.2, type=float, help='dropout percent used in Unet Encoder')
+    parser.add_argument('--unet-layers', default=None, type=str, help='Layer sizes for the U-Net as a string l1-l2-l3-...-ln')
     
     args = parser.parse_args()
 
@@ -131,8 +132,13 @@ if __name__ == '__main__':
     if torch.cuda.is_available():
         device = "cuda:0"
 
+    # Determine the layer sizes of the U-Net
+    unet_layers = DEFAULT_UNET_LAYERS
+    if args.unet_layers:
+        unet_layers = [int(x) for x in args.unet_layers.split("-")]
+
     # Initialize the model on the GPU
-    model = Unet(dropout=args.dropout).to(device)
+    model = Unet(dropout=args.dropout, hidden_channels=unet_layers).to(device)
     if args.load_encoder_weights:
         model.encoder.load_state_dict(torch.load(args.load_encoder_weights))
     elif args.load_bt_checkpoint:
@@ -168,11 +174,24 @@ if __name__ == '__main__':
     training_losses = []
     validation_losses = []
 
+    # Create a descriptive name for the checkpoints
+    temp_dict = dict(args._get_kwargs())
+    descrip_name = ""
+    for key in temp_dict.keys():
+        if (key != "rootdir" and
+            "load" not in key and
+            "checkpoint" not in key and
+            "workers" not in key and
+            "save_freq" not in key):
+            descrip_name += "--" + key + "=" + str(temp_dict[key])
+    descrip_name = descrip_name.replace(' ', '_').replace('[', '').replace(']', '').replace('\'', '')
+
     epoch_pbar = tqdm(total=args.epochs, desc="Epochs")
     for i in range(args.epochs):
         train_loss = train_model(model, training_dataloader, criterion, optimizer, device)
         validation_loss = eval_model(model, validation_dataloader, criterion, device)
         training_losses.append(train_loss)
+        validation_losses.append(validation_loss)
         epoch_pbar.write("=" * 80)
         epoch_pbar.write("Epoch: {}".format(i))
         epoch_pbar.write("Train Loss : {:.4f}".format(train_loss))
@@ -182,5 +201,9 @@ if __name__ == '__main__':
 
         if i % args.save_freq == 0:
             # save the model
-            state = dict(epoch=i + 1, model=model.state_dict(), optimizer=optimizer.state_dict())
-            torch.save(state, args.checkpoint_dir / 'image-segmentation-checkpoint.pth')
+            state = dict(epoch=i + 1,
+                         model=model.state_dict(),
+                         optimizer=optimizer.state_dict(),
+                         unet_layer_sizes=unet_layers,
+                         args=temp_dict)
+            torch.save(state, args.checkpoint_dir / f'unet{descrip_name}.pth')
