@@ -181,8 +181,7 @@ if __name__ == '__main__':
         epoch_pbar.write("Validation Loss : {:.4f}".format(validation_loss))
         epoch_pbar.write("=" * 80)
         epoch_pbar.update(1)
-<<<<<<< Updated upstream
-=======
+
         # Save plot of Train/Validation Loss Per Epoch
         plt.clf()
         plt.plot(range(len(training_losses)),training_losses,'r')
@@ -195,7 +194,7 @@ if __name__ == '__main__':
             scheduler.step()
         elif args.scheduler[0] == 'ReduceOnPlateau':
             scheduler.step(validation_loss)
->>>>>>> Stashed changes
+
 
         if i % args.save_freq == 0:
             # save the model
