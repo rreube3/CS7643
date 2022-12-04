@@ -3,10 +3,12 @@ import torch
 import os
 import pickle
 import torchvision.transforms as transforms
+import matplotlib.pyplot as plt
 from torch.utils.data import Dataset
 from typing import List
 from pathlib import Path
 from tqdm import tqdm
+
 
 from img_transform.transforms import EyeMaskCustomTransform, EyeDatasetCustomTransform
 from model.unet import Unet, DEFAULT_UNET_LAYERS
@@ -211,6 +213,15 @@ if __name__ == '__main__':
         epoch_pbar.write("Validation Loss : {:.4f}".format(validation_loss))
         epoch_pbar.write("=" * 80)
         epoch_pbar.update(1)
+
+        # Save plot of Train/Validation Loss Per Epoch
+        plt.clf()
+        plt.plot(range(len(training_losses)),training_losses,'r')
+        plt.plot(range(len(validation_losses)),validation_losses,'b') 
+        plt.legend(['Training Loss','Validation Loss'])
+        plt.title('Training and Validation Loss for Unet')
+        plt.savefig('plot' + str(i) + '.png')
+
         # Take appropriate scheduler step (if necessary)
         if args.scheduler[0] == 'CosineAnnealing':
             scheduler.step()
