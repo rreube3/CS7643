@@ -9,6 +9,7 @@
 # Took this from https://github.com/pytorch/pytorch/blob/master/.gitignore
 
 ## PyTorch
+.**.png
 data/
 checkpoint/
 ./barlow/checkpoint/
