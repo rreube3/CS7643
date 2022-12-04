@@ -7,6 +7,9 @@ DECONV_KERNEL_SIZE = 2
 DECONV_STRIDE = 2
 
 
+DEFAULT_UNET_LAYERS = (64, 128, 256, 512, 1024)
+
+
 class ConvBlock(nn.Module):
     """U-Net Convolutional Block"""
 
@@ -51,7 +54,7 @@ class UnetEncoder(nn.Module):
 
     def __init__(self,
                  num_channels_in: int = 3,
-                 hidden_channels: List = (64, 128, 256, 512, 1024),
+                 hidden_channels: List = DEFAULT_UNET_LAYERS,
                  kernel_size: int = 3,
                  padding: int = 1,
                  dropout: float = 0.2):
@@ -134,7 +137,7 @@ class UnetDecoder(nn.Module):
     """U-Net Decoder"""
 
     def __init__(self,
-                 hidden_channels: List = (64, 128, 256, 512, 1024),
+                 hidden_channels: List = DEFAULT_UNET_LAYERS,
                  dropout: float = 0.2):
         """
         Initialize the U-Net Decoder
@@ -171,7 +174,7 @@ class Unet(nn.Module):
     def __init__(self,
                  num_channels_in: int = 4,
                  num_classes: int = 1,
-                 hidden_channels: List = (64, 128, 256, 512, 1024),
+                 hidden_channels: List = DEFAULT_UNET_LAYERS,
                  kernel_size: int = 3,
                  padding: int = 1,
                  dropout: float = 0.2):
