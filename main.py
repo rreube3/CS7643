@@ -213,11 +213,6 @@ if __name__ == '__main__':
         epoch_pbar.write("Validation Loss : {:.4f}".format(validation_loss))
         epoch_pbar.write("=" * 80)
         epoch_pbar.update(1)
-        # Take appropriate scheduler step (if necessary)
-        if args.scheduler[0] == 'CosineAnnealing':
-            scheduler.step()
-        elif args.scheduler[0] == 'ReduceOnPlateau':
-            scheduler.step(validation_loss)
 
         # Save plot of Train/Validation Loss Per Epoch
         plt.clf()
@@ -226,12 +221,12 @@ if __name__ == '__main__':
         plt.legend(['Training Loss','Validation Loss'])
         plt.title('Training and Validation Loss for Unet')
         plt.savefig('plot' + str(i) + '.png')
+
         # Take appropriate scheduler step (if necessary)
         if args.scheduler[0] == 'CosineAnnealing':
             scheduler.step()
         elif args.scheduler[0] == 'ReduceOnPlateau':
             scheduler.step(validation_loss)
-
 
         if i % args.save_freq == 0:
             # save the model
