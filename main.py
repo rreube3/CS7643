@@ -11,8 +11,11 @@ from tqdm import tqdm
 
 
 from img_transform.transforms import EyeMaskCustomTransform, EyeDatasetCustomTransform
+from model.metrics import Metrics
 from model.unet import Unet, DEFAULT_UNET_LAYERS
 from model.dice_loss import DiceLoss, DiceBCELoss
+
+# python main.py --rootdir A:\DATA_4D_Patches\DATA_4D_Patches\ --workers 8 --epochs 5 --loss-function BCEWithLogitsLoss
 
 
 IMG_TRANSFORMS = transforms.Compose([
@@ -60,6 +63,7 @@ class RetinaSegmentationDataset(Dataset):
 
 
 def train_model(model, dataloader, criterion, optimizer, device):
+    metrics_tracker = Metrics(device)
     model.train()
     train_running_loss = 0.0
     for ind, (img, lbl) in enumerate(tqdm(dataloader, desc="Training")):
@@ -71,6 +75,8 @@ def train_model(model, dataloader, criterion, optimizer, device):
         optimizer.zero_grad()
         # Compute loss
         loss = criterion(lbl_pred, lbl)
+        # compute metrics
+        metrics_tracker.calculate(lbl_pred, lbl)
         # Running tally
         train_running_loss += loss.item() * img.shape[0]
         # Backward step
@@ -79,10 +85,13 @@ def train_model(model, dataloader, criterion, optimizer, device):
 
     # Compute the loss for this epoch
     train_loss = train_running_loss / (ind + 1)
+    # Compute the metrics for this epoch
+    print(f'Training metrics: {str(metrics_tracker.get_mean_metrics(ind + 1))}')
     return train_loss
 
 
 def eval_model(model, dataloader, criterion, device):
+    metrics_tracker = Metrics(device)
     model.eval()
     eval_running_loss = 0.0
     with torch.no_grad():
@@ -94,11 +103,15 @@ def eval_model(model, dataloader, criterion, device):
             lbl_pred = model(img)
             # Compute loss        
             loss = criterion(lbl_pred, lbl)
+            # compute metrics
+            metrics_tracker.calculate(lbl_pred, lbl)
             # Running tally        
             eval_running_loss += loss.item() * img.shape[0]
 
     # Compute the loss for this epoch
     eval_loss = eval_running_loss / (ind + 1)
+    # Compute the metrics for this epoch
+    print(f'Validation metrics: {str(metrics_tracker.get_mean_metrics(ind + 1))}')
     return eval_loss
 
 
@@ -120,7 +133,7 @@ if __name__ == '__main__':
                         metavar='DIR', help='Weights to load for the encoder')
     parser.add_argument('--load-bt-checkpoint', default=None, type=Path,
                         metavar='DIR', help='Checkpoint weights to load for the encoder')
-    parser.add_argument('--save-freq', default=5, type=int,
+    parser.add_argument('--save-freq', default=1, type=int,
                         metavar='N', help='How frequent to save')
     parser.add_argument('--loss-function', nargs=1,
                         choices=['BCEWithLogitsLoss', 'CrossEntropyLoss', 'DiceLoss', 'DiceBCELoss'])
