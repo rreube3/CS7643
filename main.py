@@ -1,4 +1,6 @@
 import argparse
+from typing import Dict
+
 import torch
 import os
 from pathlib import Path
@@ -9,6 +11,7 @@ from model.metrics import Metrics
 from model.unet import Unet, DEFAULT_UNET_LAYERS
 from model.dice_loss import DiceLoss, DiceBCELoss
 from datasets.dataset import RetinaSegmentationDataset
+from utils.resultPrinter import ResultPrinter
 
 
 def train_model(model, dataloader, criterion, optimizer, device):
@@ -35,8 +38,9 @@ def train_model(model, dataloader, criterion, optimizer, device):
     # Compute the loss for this epoch
     train_loss = train_running_loss / (ind + 1)
     # Compute the metrics for this epoch
-    print(f'Training metrics: {str(metrics_tracker.get_mean_metrics(ind + 1))}')
-    return train_loss
+    metrics = metrics_tracker.get_mean_metrics(ind + 1)
+    metrics['loss'] = train_loss
+    return metrics
 
 
 def eval_model(model, dataloader, criterion, device):
@@ -60,8 +64,9 @@ def eval_model(model, dataloader, criterion, device):
     # Compute the loss for this epoch
     eval_loss = eval_running_loss / (ind + 1)
     # Compute the metrics for this epoch
-    print(f'Validation metrics: {str(metrics_tracker.get_mean_metrics(ind + 1))}')
-    return eval_loss
+    metrics = metrics_tracker.get_mean_metrics(ind + 1)
+    metrics['loss'] = eval_loss
+    return metrics
 
 
 if __name__ == '__main__':
@@ -163,10 +168,22 @@ if __name__ == '__main__':
             descrip_name += "--" + key + "=" + str(temp_dict[key])
     descrip_name = descrip_name.replace(' ', '_').replace('[', '').replace(']', '').replace('\'', '')
 
+    runs: Dict[str, Dict[str, float]] = {}
+    result_printer = ResultPrinter(descrip_name, runs)
+
     epoch_pbar = tqdm(total=args.epochs, desc="Epochs")
     for i in range(args.epochs):
-        train_loss = train_model(model, training_dataloader, criterion, optimizer, device)
-        validation_loss = eval_model(model, validation_dataloader, criterion, device)
+
+        train_metrics = train_model(model, training_dataloader, criterion, optimizer, device)
+        result_printer.print(f'Training metrics: {str(train_metrics)}')
+        train_loss = train_metrics['loss']
+
+        validation_metrics = eval_model(model, validation_dataloader, criterion, device)
+        result_printer.print(f'Validation metrics: {str(validation_metrics)}')
+        validation_loss = validation_metrics['loss']
+
+        result_printer.rankAndSave(validation_metrics)
+
         training_losses.append(train_loss)
         validation_losses.append(validation_loss)
         epoch_pbar.write("=" * 80)
@@ -177,12 +194,7 @@ if __name__ == '__main__':
         epoch_pbar.update(1)
 
         # Save plot of Train/Validation Loss Per Epoch
-        plt.clf()
-        plt.plot(range(len(training_losses)),training_losses,'r')
-        plt.plot(range(len(validation_losses)),validation_losses,'b') 
-        plt.legend(['Training Loss','Validation Loss'])
-        plt.title('Training and Validation Loss for Unet')
-        plt.savefig('plot' + str(i) + '.png')
+        result_printer.makePlots(training_losses, validation_losses, i)
 
         # Take appropriate scheduler step (if necessary)
         if args.scheduler[0] == 'CosineAnnealing':
@@ -198,3 +210,5 @@ if __name__ == '__main__':
                          unet_layer_sizes=unet_layers,
                          args=temp_dict)
             torch.save(state, args.checkpoint_dir / f'unet{descrip_name}.pth')
+
+    result_printer.close()
