@@ -21,7 +21,7 @@ class ResultPrinter:
         self.run_path: str = f"{self.base_path}{param_label}/"
         if not os.path.exists(self.run_path):
             os.makedirs(self.run_path)
-        self.out_file = open(f"{self.run_path}/results.txt", "w")
+        self.out_file = open(f"{self.run_path}results.txt", "w")
 
     def print(self, print_str: str, end='\n') -> None:
         """
@@ -42,7 +42,7 @@ class ResultPrinter:
         """
         self.runs[self.param_label] = validation_metrics
         # sort_by lowest validation loss
-        with open(f"{self.base_path}/ranked_results.txt", "w")as rank_file:
+        with open(f"{self.base_path}ranked_results.txt", "w")as rank_file:
             for out in sorted(self.runs.items(), lambda x: x[1]['loss']):
                 rank_file.write(str(out) + '\n')
 
@@ -60,7 +60,7 @@ class ResultPrinter:
         plt.plot(range(len(validation_losses)),validation_losses,'b')
         plt.legend(['Training Loss','Validation Loss'])
         plt.title('Training and Validation Loss for Unet')
-        plt.savefig(f"{self.run_path}/plot{epoch}.txt")
+        plt.savefig(f"{self.run_path}plot{epoch}.txt")
         # write loss arrays to outfile
         self.print(f"training loss per epoch: {str(training_losses)}")
         self.print(f"validation loss per epoch: {str(validation_losses)}")
