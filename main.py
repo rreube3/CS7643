@@ -168,7 +168,9 @@ if __name__ == '__main__':
             descrip_name += "--" + key + "=" + str(temp_dict[key])
     descrip_name = descrip_name.replace(' ', '_').replace('[', '').replace(']', '').replace('\'', '')
 
+    # runs dict should be passed to each instance of a results printer. It is only appended to so should be thread safe.
     runs: Dict[str, Dict[str, float]] = {}
+    # create a new results printer for each param setting tested
     result_printer = ResultPrinter(descrip_name, runs)
 
     epoch_pbar = tqdm(total=args.epochs, desc="Epochs")
