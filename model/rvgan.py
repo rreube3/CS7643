@@ -382,17 +382,63 @@ class Discriminator(nn.Module):
         return x, features
 
 
+class CoarseAndFineGenerators(nn.Module):
+    def __init__(
+        self,
+        num_channels_in: int,
+        num_channels_out: int = 1,
+        init_num_channels: int = 128,
+        num_up_and_down_sampling_layers_fine: int = 1,
+        num_residual_blocks_fine: int = 3,
+        num_up_and_down_sampling_layers_coarse: int = 2,
+        num_residual_blocks_coarse: int = 9
+    ):
+        super().__init__()
+
+        self.fine_generator = FineGenerator(
+            num_channels_in,
+            num_channels_out,
+            init_num_channels,
+            num_up_and_down_sampling_layers_fine,
+            num_residual_blocks_fine
+        )
+
+        self.coarse_generator = CoarseGenerator(
+            num_channels_in,
+            num_channels_out,
+            init_num_channels,
+            num_up_and_down_sampling_layers_coarse,
+            num_residual_blocks_coarse
+        )
+        
+        # Compute the decimination factor
+        self.decimination_factor = 2**(num_up_and_down_sampling_layers_coarse - 1)
+
+    def forward(self,
+                x: torch.Tensor,
+                decimated_x: torch.Tensor = None
+        ) -> Tuple[torch.Tensor, torch.Tensor]:
+
+        # Create the decimated image for the coarse
+        if decimated_x is None:
+            decimated_shape = [int(d / self.decimination_factor) for d in x.shape[2:]]
+            resizer = Resize(size=decimated_shape)
+            decimated_x = resizer(x)
+
+        # Run the generators
+        coarse_generator_out = self.coarse_generator(decimated_x)
+        fine_generator_out = self.fine_generator(x,
+                                                 residual_skip_connection=coarse_generator_out)
+        return coarse_generator_out, fine_generator_out
+
+
 class RVGAN(nn.Module):
     def __init__(self,
                  num_channels_in: int,
                  num_coarse_up_and_down_sampling_layers: int = 2):
         super().__init__()
         # Create the generators
-        self.coarse_generator = CoarseGenerator(
-            num_channels_in,
-            num_up_and_down_sampling_layers=num_coarse_up_and_down_sampling_layers
-        )
-        self.fine_generator = FineGenerator(num_channels_in)
+        self.generators = CoarseAndFineGenerators(num_channels_in)
         # Create the discriminators
         self.coarse_discriminator = Discriminator(num_channels_in)
         self.fine_discriminator = Discriminator(num_channels_in)
@@ -408,11 +454,13 @@ class RVGAN(nn.Module):
         decimated_x = resizer(x)
         if vessel_labels is not None:
             decimated_vessel_lbls = resizer(vessel_labels)
+        else:
+            decimated_vessel_lbls = None
 
         # Run the GANs
-        coarse_generator_out = self.coarse_generator(decimated_x)
-        fine_generator_out = self.fine_generator(x,
-                                                 residual_skip_connection=coarse_generator_out)
+        coarse_generator_out, fine_generator_out = self.generators(
+            x, decimated_x=decimated_x
+        )
 
         # Run the Discriminators sending the real vessel map and the GAN generated one
         if vessel_labels is not None:
@@ -453,5 +501,9 @@ class RVGAN(nn.Module):
                 "Coarse Discriminator Features": fake_coarse_discriminator_features,
                 "Fine Discriminator Out": fake_fine_discriminator_out,
                 "Fine Discriminator Features": fake_fine_discriminator_features
+            },
+            "Vessel Labels": {
+                "Fine": vessel_labels,
+                "Coarse": decimated_vessel_lbls
             }
         }
