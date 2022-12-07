@@ -97,6 +97,10 @@ def train_model(
         g_local_loss.backward()
         optimizers["Fine_Generator"].step()
 
+        # Free up memory
+        del decimated_img
+        del decimated_lbl
+
         # Train RVGAN
         model.train()
         model.coarse_discriminator.train()
@@ -109,7 +113,7 @@ def train_model(
         # Compute loss
         train_running_loss = criterion.compute_rvgan_loss(output_dict)
         # compute metrics
-        metrics_tracker.calculate(output_dict["Fake"]["Fine Discriminator Out"], lbl)
+        metrics_tracker.calculate(output_dict["Fine Generator Out"], lbl)
         # Running tally
         train_running_loss += train_running_loss * img.shape[0]
         # Backward step
