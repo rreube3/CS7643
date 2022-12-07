@@ -116,8 +116,6 @@ def train_model(
         train_running_loss.backward()
         optimizers["RVGAN"].step()
 
-        break
-
     # Compute the loss for this epoch
     train_loss = train_running_loss / (ind + 1)
     # Compute the metrics for this epoch
@@ -143,8 +141,6 @@ def eval_model(model: RVGAN, dataloader, device):
             metrics_tracker.calculate(lbl_pred, lbl)
             # Running tally        
             eval_running_loss += loss.item() * img.shape[0]
-
-            break
 
     # Compute the loss for this epoch
     eval_loss = eval_running_loss / (ind + 1)
@@ -292,4 +288,4 @@ if __name__ == '__main__':
             state = dict(epoch=i + 1,
                          model=model.state_dict(),
                          args=temp_dict)
-            torch.save(state, args.checkpoint_dir / f'rvgan{descrip_name}.pth')
+            torch.save(state, args.checkpoint_dir / f'rvgan{descrip_name}epoch-{i}.pth')
