@@ -1,63 +1,18 @@
 import argparse
 import torch
 import os
-import pickle
-import torchvision.transforms as transforms
-from torch.utils.data import Dataset
-from typing import List
 from pathlib import Path
+import matplotlib.pyplot as plt
 from tqdm import tqdm
 
-from img_transform.transforms import EyeMaskCustomTransform, EyeDatasetCustomTransform
+from model.metrics import Metrics
 from model.unet import Unet, DEFAULT_UNET_LAYERS
 from model.dice_loss import DiceLoss, DiceBCELoss
-
-
-IMG_TRANSFORMS = transforms.Compose([
-    transforms.ToTensor(),
-    EyeDatasetCustomTransform(mask_threshold=0.25),
-])
-
-
-LBL_TRANSFORMS = transforms.Compose([
-    transforms.ToTensor(),
-    EyeMaskCustomTransform(mask_threshold=0.25),
-])
-
-
-class RetinaSegmentationDataset(Dataset):
-    def __init__(self, rootdir: str,
-                 basenames: List,
-                 img_transforms: torch.nn.Module = IMG_TRANSFORMS,
-                 lbl_transforms: torch.nn.Module = LBL_TRANSFORMS):
-        self._rootdir = rootdir
-        self._basenames = basenames
-        self._img_transforms = img_transforms
-        self._lbl_transforms = lbl_transforms
-        
-    def __len__(self) -> int:
-        return len(self._basenames)
-    
-    def __getitem__(self, index: int) -> (torch.Tensor, torch.Tensor):
-        img_path = os.path.join(self._rootdir, "images", self._basenames[index])
-        lbl_path = os.path.join(self._rootdir, "labels", self._basenames[index])
-        
-        with open(img_path, "rb") as f:
-            img = pickle.load(f)
-            # Apply the transforms for the image
-            img = self._img_transforms(img)
-            
-        #'''
-        with open(lbl_path, "rb") as f:
-            lbl = pickle.load(f)
-            # Apply the transforms for the labels
-            lbl = self._lbl_transforms(lbl)
-        #'''
-            
-        return img, lbl
+from datasets.dataset import RetinaSegmentationDataset
 
 
 def train_model(model, dataloader, criterion, optimizer, device):
+    metrics_tracker = Metrics(device)
     model.train()
     train_running_loss = 0.0
     for ind, (img, lbl) in enumerate(tqdm(dataloader, desc="Training")):
@@ -69,6 +24,8 @@ def train_model(model, dataloader, criterion, optimizer, device):
         optimizer.zero_grad()
         # Compute loss
         loss = criterion(lbl_pred, lbl)
+        # compute metrics
+        metrics_tracker.calculate(lbl_pred, lbl)
         # Running tally
         train_running_loss += loss.item() * img.shape[0]
         # Backward step
@@ -77,10 +34,13 @@ def train_model(model, dataloader, criterion, optimizer, device):
 
     # Compute the loss for this epoch
     train_loss = train_running_loss / (ind + 1)
+    # Compute the metrics for this epoch
+    print(f'Training metrics: {str(metrics_tracker.get_mean_metrics(ind + 1))}')
     return train_loss
 
 
 def eval_model(model, dataloader, criterion, device):
+    metrics_tracker = Metrics(device)
     model.eval()
     eval_running_loss = 0.0
     with torch.no_grad():
@@ -92,11 +52,15 @@ def eval_model(model, dataloader, criterion, device):
             lbl_pred = model(img)
             # Compute loss        
             loss = criterion(lbl_pred, lbl)
+            # compute metrics
+            metrics_tracker.calculate(lbl_pred, lbl)
             # Running tally        
             eval_running_loss += loss.item() * img.shape[0]
 
     # Compute the loss for this epoch
     eval_loss = eval_running_loss / (ind + 1)
+    # Compute the metrics for this epoch
+    print(f'Validation metrics: {str(metrics_tracker.get_mean_metrics(ind + 1))}')
     return eval_loss
 
 
@@ -118,7 +82,7 @@ if __name__ == '__main__':
                         metavar='DIR', help='Weights to load for the encoder')
     parser.add_argument('--load-bt-checkpoint', default=None, type=Path,
                         metavar='DIR', help='Checkpoint weights to load for the encoder')
-    parser.add_argument('--save-freq', default=5, type=int,
+    parser.add_argument('--save-freq', default=1, type=int,
                         metavar='N', help='How frequent to save')
     parser.add_argument('--loss-function', nargs=1,
                         choices=['BCEWithLogitsLoss', 'CrossEntropyLoss', 'DiceLoss', 'DiceBCELoss'])
@@ -211,6 +175,15 @@ if __name__ == '__main__':
         epoch_pbar.write("Validation Loss : {:.4f}".format(validation_loss))
         epoch_pbar.write("=" * 80)
         epoch_pbar.update(1)
+
+        # Save plot of Train/Validation Loss Per Epoch
+        plt.clf()
+        plt.plot(range(len(training_losses)),training_losses,'r')
+        plt.plot(range(len(validation_losses)),validation_losses,'b') 
+        plt.legend(['Training Loss','Validation Loss'])
+        plt.title('Training and Validation Loss for Unet')
+        plt.savefig('plot' + str(i) + '.png')
+
         # Take appropriate scheduler step (if necessary)
         if args.scheduler[0] == 'CosineAnnealing':
             scheduler.step()

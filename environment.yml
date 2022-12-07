@@ -2,6 +2,7 @@ name: cs7643-final
 channels:
   - pytorch
   - nvidia
+  - conda-forge
   - defaults
 dependencies:
   - pytorch::pytorch-cuda=11.6.0
@@ -19,3 +20,4 @@ dependencies:
   - opencv
   - notebook
   - tqdm
+  - torchmetrics
