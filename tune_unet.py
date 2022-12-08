@@ -18,6 +18,10 @@ from ray.tune.schedulers import ASHAScheduler
 # NOTE: Referenced https://pytorch.org/tutorials/beginner/hyperparameter_tuning_tutorial.html when creating this script
 
 
+# runs dict should be passed to each instance of a results printer. It is only appended to so should be thread safe.
+runs: Dict[str, Dict[str, float]] = {}
+
+
 def train_model(model, dataloader, criterion, optimizer, device):
     metrics_tracker = Metrics(device)
     model.train()
@@ -136,8 +140,6 @@ def train_unet(config, workers, epochs, data_directory, load_encoder_weights, lo
         descrip_name += "--" + key + "=" + str(temp_dict[key])
     descrip_name = descrip_name.replace(' ', '_').replace('[', '').replace(']', '').replace('\'', '')
 
-    # runs dict should be passed to each instance of a results printer. It is only appended to so should be thread safe.
-    runs: Dict[str, Dict[str, float]] = {}
     # create a new results printer for each param setting tested
     result_printer = ResultPrinter(descrip_name, runs)
 
@@ -199,12 +201,12 @@ if __name__ == '__main__':
     args = parser.parse_args()
 
     config = {
-        "lr": tune.loguniform(1e-4, 1e-1),
-        "batch_size": tune.choice([4, 8, 16, 32]),
+        "lr": tune.loguniform(1e-5, 1e-1),
+        "batch_size": tune.choice([16, 32]),
         "loss_func": tune.choice(['BCEWithLogitsLoss', 'CrossEntropyLoss', 'DiceLoss', 'DiceBCELoss']),
-        "dropout": tune.choice([0.10, 0.15, 0.20, 0.25, 0.30]),
+        "dropout": tune.choice([0.2, 0.5]),
         "scheduler": tune.choice(['Fixed', 'CosineAnnealing', 'ReduceOnPlateau']),
-        "unet_layers": tune.choice([DEFAULT_UNET_LAYERS])
+        "unet_layers": tune.choice(["16-32", "16-32-64", "16-32-64-128"])
     }
     scheduler = ASHAScheduler(
         metric="loss",
@@ -222,7 +224,9 @@ if __name__ == '__main__':
         config=config,
         num_samples=args.num_samples,
         scheduler=scheduler,
-        progress_reporter=reporter)
+        progress_reporter=reporter,
+        max_concurrent_trials=1
+    )
 
     best_trial = result.get_best_trial("loss", "min", "last")
     print("Best trial config: {}".format(best_trial.config))
