@@ -12,6 +12,7 @@ from datasets.dataset import RetinaSegmentationDataset
 from utils.resultPrinter import ResultPrinter
 from functools import partial
 from ray import tune
+import ray
 from ray.tune import CLIReporter
 from ray.tune.schedulers import ASHAScheduler
 from multiprocessing import cpu_count
@@ -201,11 +202,12 @@ if __name__ == '__main__':
                         help='https://pytorch.org/tutorials/beginner/hyperparameter_tuning_tutorial.html')
 
     args = parser.parse_args()
+    ray.init()
 
     config = {
         "lr": tune.loguniform(1e-5, 1e-1),
         "batch_size": tune.choice([16, 32]),
-        "loss_func": tune.choice(['BCEWithLogitsLoss', 'CrossEntropyLoss', 'DiceLoss', 'DiceBCELoss']),
+        "loss_func": tune.choice(['BCEWithLogitsLoss', 'DiceLoss', 'DiceBCELoss']),
         "dropout": tune.choice([0.2, 0.5]),
         "scheduler": tune.choice(['Fixed', 'CosineAnnealing', 'ReduceOnPlateau']),
         "unet_layers": tune.choice(["16-32", "16-32-64", "16-32-64-128"])
@@ -226,7 +228,6 @@ if __name__ == '__main__':
         num_samples=args.num_samples,
         scheduler=scheduler,
         progress_reporter=reporter,
-        max_concurrent_trials=1,
         resources_per_trial={"cpu": cpu_count(), "gpu": 1}
     )
 

@@ -99,6 +99,8 @@ if __name__ == '__main__':
                         help='Cosine Annealing: Maximum number of iterations for cosine annealing')
     parser.add_argument('--anneal_eta', default=0, type=float,
                         help='Cosine Annealing: Minimum learning rate. Default: 0')
+    parser.add_argument('--run-name', default=None, type=str,
+                        help='Run Name')
     
     args = parser.parse_args()
 
@@ -171,7 +173,7 @@ if __name__ == '__main__':
     # runs dict should be passed to each instance of a results printer. It is only appended to so should be thread safe.
     runs: Dict[str, Dict[str, float]] = {}
     # create a new results printer for each param setting tested
-    result_printer = ResultPrinter(descrip_name, runs)
+    result_printer = ResultPrinter(descrip_name, runs, run_name=args.run_name)
 
     epoch_pbar = tqdm(total=args.epochs, desc="Epochs")
     for i in range(args.epochs):
