@@ -56,12 +56,12 @@ class ResultPrinter:
         :param epoch:
         :return:
         """
-        plt.clf()
-        plt.plot(range(len(training_losses)),training_losses,'r')
-        plt.plot(range(len(validation_losses)),validation_losses,'b')
-        plt.legend(['Training Loss','Validation Loss'])
-        plt.title('Training and Validation Loss for Unet')
-        plt.savefig(f"{self.run_path}plot{epoch}.png")
+        # plt.close()
+        # plt.plot(range(len(training_losses)),training_losses,'r')
+        # plt.plot(range(len(validation_losses)),validation_losses,'b')
+        # plt.legend(['Training Loss','Validation Loss'])
+        # plt.title('Training and Validation Loss for Unet')
+        # plt.savefig(f"{self.run_path}plot{epoch}.png")
         # write loss arrays to outfile
         self.print(f"training loss per epoch: {str(training_losses)}")
         self.print(f"validation loss per epoch: {str(validation_losses)}")
