@@ -14,6 +14,8 @@ from functools import partial
 from ray import tune
 from ray.tune import CLIReporter
 from ray.tune.schedulers import ASHAScheduler
+from multiprocessing import cpu_count
+
 
 # NOTE: Referenced https://pytorch.org/tutorials/beginner/hyperparameter_tuning_tutorial.html when creating this script
 
@@ -220,12 +222,12 @@ if __name__ == '__main__':
     result = tune.run(
         partial(train_unet, workers=args.workers, epochs=args.epochs, data_directory=args.rootdir,
                 load_encoder_weights=args.load_encoder_weights, load_bt_checkpoint=args.load_bt_checkpoint),
-        resources_per_trial={"cpu": 2, "gpu": args.gpus_per_trial},
         config=config,
         num_samples=args.num_samples,
         scheduler=scheduler,
         progress_reporter=reporter,
-        max_concurrent_trials=1
+        max_concurrent_trials=1,
+        resources_per_trial={"cpu": cpu_count(), "gpu": 1}
     )
 
     best_trial = result.get_best_trial("loss", "min", "last")
