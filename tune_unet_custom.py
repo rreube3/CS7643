@@ -86,7 +86,7 @@ class TrainingRunnable:
         self._run_name = run_name
 
     def run(self, thread_num, workers, epochs, data_directory, load_encoder_weights, load_bt_checkpoint):
-        for config in tqdm(self.paramList, desc="Training Thread {}".format(thread_num)):
+        for config in tqdm(self.paramList, desc="Config Combo - Thread {}".format(thread_num)):
 
             # Create a descriptive name for the checkpoints
             temp_dict = dict(config)
@@ -195,8 +195,8 @@ class TrainingRunnable:
                 del model
                 result_printer.close()
             except Exception as err:
-                print(f'{descrip_name} failed due to {str(err)} sleeping 30 seconds')
-                sleep(30)
+                print(f'{descrip_name} failed due to {str(err)} sleeping 5 seconds')
+                sleep(5)
 
 
 if __name__ == '__main__':
@@ -229,7 +229,7 @@ if __name__ == '__main__':
         "loss_func": ['BCEWithLogitsLoss', 'DiceLoss', 'DiceBCELoss'],
         "dropout": [0.2, ],
         "scheduler": ['Fixed', 'CosineAnnealing', 'ReduceOnPlateau'],
-        "unet_layers": ["16-32", "16-32-64", "16-32-64-128", "64-128", "64-128-256", "64-128-256-512"]
+        "unet_layers": ["16-32", "16-32-64", "16-32-64-128", "64-128", "64-128-256"]#, "64-128-256-512"]
     }
 
     numComb = 0
