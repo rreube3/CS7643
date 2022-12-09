@@ -225,11 +225,12 @@ if __name__ == '__main__':
 
     total_args = {
         "lr": [1e-4, 1e-3, 1e-2],
-        "batch_size": [16, 32, 64],
+        "batch_size": [16, 32],
         "loss_func": ['BCEWithLogitsLoss', 'DiceLoss', 'DiceBCELoss'],
         "dropout": [0.2, ],
         "scheduler": ['Fixed', 'CosineAnnealing', 'ReduceOnPlateau'],
         "unet_layers": ["16-32", "16-32-64", "16-32-64-128", "64-128", "64-128-256"]#, "64-128-256-512"]
+
     }
 
     numComb = 0
