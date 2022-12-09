@@ -6,7 +6,7 @@ from matplotlib import pyplot as plt
 
 class ResultPrinter:
 
-    def __init__(self, param_label: str, runs: Dict[str, Dict[str, float]]):
+    def __init__(self, param_label: str, runs: Dict[str, Dict[str, float]], time_label: int):
         """
         Initializes the result printer. Creates result output directory structure.
         :param param_label: should uniquely identify each hyper parameter setting.
@@ -15,13 +15,14 @@ class ResultPrinter:
         """
         self.param_label = param_label
         self.runs = runs
+        self.parent_path = 'C:\\Users\\RReub\\Documents\\OMSA\\CS_7643\\git_project\\CS7643' # add - must use abs path
         # Create the directory if it does not exist
-        tm_label: int = int(time.time())
-        self.base_path: str = f"./auto_results/{tm_label}/"
-        self.run_path: str = f"{self.base_path}{param_label}/"
+        self.base_path = os.path.join(self.parent_path, 'auto_results', str(time_label))  # add
+        self.run_path = os.path.join(self.base_path, param_label)  # add
+        print('run path', self.run_path)
         if not os.path.exists(self.run_path):
             os.makedirs(self.run_path)
-        self.out_file = open(f"{self.run_path}results.txt", "w")
+        self.out_file = open(f"{self.run_path}\\results.txt", "w")  # add
 
     def print(self, print_str: str, end='\n') -> None:
         """
@@ -43,7 +44,7 @@ class ResultPrinter:
         self.runs[self.param_label] = validation_metrics
         # sort_by lowest validation loss
         with open(f"{self.base_path}ranked_results.txt", "w")as rank_file:
-            for out in sorted(self.runs.items(), lambda x: x[1]['loss']):
+            for out in sorted(self.runs.items(), key=lambda x: x[1]['loss']):  # add key
                 rank_file.write(str(out) + '\n')
 
     def makePlots(self, training_losses: List[float], validation_losses: List[float], epoch: int):
