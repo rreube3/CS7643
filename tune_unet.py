@@ -74,7 +74,7 @@ def eval_model(model, dataloader, criterion, device):
     return metrics
 
 
-def train_unet(config, workers, epochs, data_directory, load_encoder_weights, load_bt_checkpoint):
+def train_unet(config, workers, epochs, data_directory, load_encoder_weights, load_bt_checkpoint, runs):
 
     # Get the device
     device = "cpu"
@@ -138,9 +138,9 @@ def train_unet(config, workers, epochs, data_directory, load_encoder_weights, lo
         descrip_name += "--" + key + "=" + str(temp_dict[key])
     descrip_name = descrip_name.replace(' ', '_').replace('[', '').replace(']', '').replace('\'', '')
     # runs dict should be passed to each instance of a results printer. It is only appended to so should be thread safe.
-    runs: Dict[str, Dict[str, float]] = {}
+    #runs: Dict[str, Dict[str, float]] = {} = now pass
     # create a new results printer for each param setting tested
-    time_label = int(time.time())
+    time_label = "ray-tune"
     result_printer = ResultPrinter(descrip_name, runs, time_label)
 
     epoch_pbar = tqdm(total=epochs, desc="Epochs")
@@ -174,7 +174,10 @@ def train_unet(config, workers, epochs, data_directory, load_encoder_weights, lo
             select_scheduler.step(validation_loss)
 
         # Communicate validation loss to ray-tune
-        tune.report(loss=validation_loss)
+        tune.report(f1_score=validation_metrics["f1_score"],
+                    loss=validation_loss,
+                    accuracy=validation_metrics["accuracy"]
+        )
 
     result_printer.close()
 
@@ -185,7 +188,7 @@ if __name__ == '__main__':
                         help='path to dataset with Testing, Training, and Validation directories')
     parser.add_argument('--workers', default=0, type=int, metavar='N',
                         help='number of data loader workers')
-    parser.add_argument('--epochs', default=100, type=int, metavar='N',
+    parser.add_argument('--epochs', default=10, type=int, metavar='N',
                         help='number of total epochs to run')
     parser.add_argument('--load-encoder-weights', default=None, type=Path,
                         metavar='DIR', help='Weights to load for the encoder')
@@ -197,36 +200,41 @@ if __name__ == '__main__':
                         help='https://pytorch.org/tutorials/beginner/hyperparameter_tuning_tutorial.html')
     parser.add_argument('--gpus_per_trial', default=0, type=float, metavar='N',
                         help='https://pytorch.org/tutorials/beginner/hyperparameter_tuning_tutorial.html')
+    parser.add_argument('--max_concurrent_trials', default=1, type=int, metavar='N',
+                        help='https://pytorch.org/tutorials/beginner/hyperparameter_tuning_tutorial.html')
 
     args = parser.parse_args()
 
     config = {
-        "lr": tune.loguniform(1e-4, 1e-1),
-        "batch_size": tune.choice([4, 8, 16, 32]),
-        "loss_func": tune.choice(['BCEWithLogitsLoss', 'CrossEntropyLoss', 'DiceLoss', 'DiceBCELoss']),
-        "dropout": tune.choice([0.10, 0.15, 0.20, 0.25, 0.30]),
+        "lr": tune.choice({1e-4, 1e-3, 1e-2}),
+        "batch_size": tune.choice([16, 32, 64]),
+        "loss_func": tune.choice(['BCEWithLogitsLoss', 'DiceLoss', 'DiceBCELoss']),
+        "dropout": tune.choice([0.2,]),
         "scheduler": tune.choice(['Fixed', 'CosineAnnealing', 'ReduceOnPlateau']),
-        "unet_layers": tune.choice([DEFAULT_UNET_LAYERS])
+        "unet_layers": tune.choice(["16-32", "16-32-64", "16-32-64-128", "64-128", "64-128-256"])
     }
+    runs: Dict[str, Dict[str, float]] = {}
     scheduler = ASHAScheduler(
-        metric="loss",
+        metric="f1_score",
         mode="min",
         max_t=args.max_num_epochs,
         grace_period=1,
         reduction_factor=2)
     reporter = CLIReporter(
         # parameter_columns=["lr", "batch_size", "loss_func", "dropout", "scheduler"],
-        metric_columns=["loss", "training_iteration"])
+        metric_columns=["f1_score", "accuracy", "loss", "training_iteration"])
     result = tune.run(
         partial(train_unet, workers=args.workers, epochs=args.epochs, data_directory=args.rootdir,
-                load_encoder_weights=args.load_encoder_weights, load_bt_checkpoint=args.load_bt_checkpoint),
+                load_encoder_weights=args.load_encoder_weights, load_bt_checkpoint=args.load_bt_checkpoint, runs=runs),
         resources_per_trial={"cpu": 2, "gpu": args.gpus_per_trial},
         config=config,
         num_samples=args.num_samples,
+        max_concurrent_trials=args.max_concurrent_trials,
         scheduler=scheduler,
         progress_reporter=reporter)
 
-    best_trial = result.get_best_trial("loss", "min", "last")
+    best_trial = result.get_best_trial("f1_score", "min", "last")
     print("Best trial config: {}".format(best_trial.config))
-    print("Best trial final validation loss: {}".format(
-        best_trial.last_result["loss"]))
+    print("Best trial final validation F1 Loss: {}".format(
+        best_trial.last_result["f1_score"]))
+    result.results_df.to_csv("ray_results.csv")
