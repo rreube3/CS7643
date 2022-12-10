@@ -6,7 +6,7 @@ from matplotlib import pyplot as plt
 
 class ResultPrinter:
 
-    def __init__(self, param_label: str, runs: Dict[str, Dict[str, float]], run_name: str=None):
+    def __init__(self, param_label: str, runs: Dict[str, Dict[str, float]], time_label: str):
         """
         Initializes the result printer. Creates result output directory structure.
         :param param_label: should uniquely identify each hyper parameter setting.
@@ -15,14 +15,14 @@ class ResultPrinter:
         """
         self.param_label = param_label
         self.runs = runs
+        self.parent_path = 'C:\\Users\\shawn\\Desktop\\Development\\CS7643' # add - must use abs path
         # Create the directory if it does not exist
-        if run_name is None:
-            run_name = int(time.time())
-        self.base_path: str = f"./auto_results/{run_name}/"
-        self.run_path: str = f"{self.base_path}{param_label}/"
+        self.base_path = os.path.join(self.parent_path, 'auto_results', time_label)  # add
+        self.run_path = os.path.join(self.base_path, param_label)  # add
+        print('run path', self.run_path)
         if not os.path.exists(self.run_path):
             os.makedirs(self.run_path)
-        self.out_file = open(f"{self.run_path}results.txt", "w")
+        self.out_file = open(f"{self.run_path}\\results.txt", "w")  # add
 
     def print(self, print_str: str, end='\n') -> None:
         """
