@@ -5,13 +5,14 @@ import torch
 import os
 from pathlib import Path
 import matplotlib.pyplot as plt
+from PIL import Image
 from tqdm import tqdm
-
 from model.metrics import Metrics
 from model.unet import Unet, DEFAULT_UNET_LAYERS
 from model.dice_loss import DiceLoss, DiceBCELoss
 from datasets.dataset import RetinaSegmentationDataset
 from utils.resultPrinter import ResultPrinter
+import torch.nn.functional as F
 
 
 def train_model(model, dataloader, criterion, optimizer, device):
@@ -54,11 +55,11 @@ def eval_model(model, dataloader, criterion, device):
             lbl = lbl.to(device)
             # Make the prediction
             lbl_pred = model(img)
-            # Compute loss        
+            # Compute loss
             loss = criterion(lbl_pred, lbl)
             # compute metrics
             metrics_tracker.calculate(lbl_pred, lbl)
-            # Running tally        
+            # Running tally
             eval_running_loss += loss.item() * img.shape[0]
 
     # Compute the loss for this epoch
@@ -69,40 +70,38 @@ def eval_model(model, dataloader, criterion, device):
     return metrics
 
 
+def predict_model(model, dataloader, device):
+    model.eval()
+    with torch.no_grad():
+        for ind, (img, lbl) in enumerate(tqdm(dataloader, desc="Testing")):
+            # Copy to device
+            img = img.to(device)
+            # Make the prediction
+            lbl_pred = model(img)
+            im = Image.fromarray(F.sigmoid(lbl_pred).cpu().detach().numpy()[0, 0, :, :])
+            im.save(f"./drive_predicted/{ind}.png")
+
+
 if __name__ == '__main__':
-    parser = argparse.ArgumentParser(description="Trainer")
-    parser.add_argument('--rootdir', type=Path, metavar='DIR',
-                        help='path to dataset with Testing, Training, and Validation directories')
-    parser.add_argument('--workers', default=8, type=int, metavar='N',
-                        help='number of data loader workers')
-    parser.add_argument('--epochs', default=100, type=int, metavar='N',
-                        help='number of total epochs to run')
-    parser.add_argument('--batch-size', default=32, type=int, metavar='N',
-                        help='batch size')
-    parser.add_argument('--learning-rate', default=0.0001, type=float, metavar='LR',
-                        help='learning rate')
-    parser.add_argument('--checkpoint-dir', default='./checkpoint/', type=Path,
-                        metavar='DIR', help='path to checkpoint directory')
-    parser.add_argument('--load-encoder-weights', default=None, type=Path,
-                        metavar='DIR', help='Weights to load for the encoder')
-    parser.add_argument('--load-bt-checkpoint', default=None, type=Path,
-                        metavar='DIR', help='Checkpoint weights to load for the encoder')
-    parser.add_argument('--save-freq', default=1, type=int,
-                        metavar='N', help='How frequent to save')
-    parser.add_argument('--loss-function', nargs=1,
-                        choices=['BCEWithLogitsLoss', 'CrossEntropyLoss', 'DiceLoss', 'DiceBCELoss'])
-    parser.add_argument('--dropout', default=0.2, type=float, help='dropout percent used in Unet Encoder')
-    parser.add_argument('--unet-layers', default=None, type=str, help='Layer sizes for the U-Net as a string l1-l2-l3-...-ln')
-    parser.add_argument('--scheduler', nargs=1, default='Fixed',
-                        choices=['Fixed', 'CosineAnnealing', 'ReduceOnPlateau'])
-    parser.add_argument('--anneal_tmax', default=10, type=int,
-                        help='Cosine Annealing: Maximum number of iterations for cosine annealing')
-    parser.add_argument('--anneal_eta', default=0, type=float,
-                        help='Cosine Annealing: Minimum learning rate. Default: 0')
-    parser.add_argument('--run-name', default=None, type=str,
-                        help='Run Name')
-    
-    args = parser.parse_args()
+
+    rootdir: str = "A:/DATA_4D_Patches/DATA_4D_Patches/"
+    workers: int = 8
+    load_encoder_weights: str = None
+    load_bt_checkpoint: str = None
+    anneal_tmax: int = 10
+    anneal_eta: int = 0
+    run_name: str = "test-drive"
+    checkpoint_dir: str = "./checkpoint/"
+
+    args = {
+        "learning-rate": 0.01,
+        "unet_layers": "64-128-256",
+        "epochs": 10,
+        "batch-size": 64,
+        "scheduler": "CosineAnnealing",
+        "loss-function": "DiceLoss",
+        "dropout": 0.2
+    }
 
     # Get the device
     device = "cpu"
@@ -111,22 +110,22 @@ if __name__ == '__main__':
 
     # Determine the layer sizes of the U-Net
     unet_layers = DEFAULT_UNET_LAYERS
-    if args.unet_layers:
-        unet_layers = [int(x) for x in args.unet_layers.split("-")]
+    if args["unet_layers"]:
+        unet_layers = [int(x) for x in args["unet_layers"].split("-")]
 
     # Initialize the model on the GPU
-    model = Unet(dropout=args.dropout, hidden_channels=unet_layers).to(device)
-    if args.load_encoder_weights:
-        model.encoder.load_state_dict(torch.load(args.load_encoder_weights))
-    elif args.load_bt_checkpoint:
-        model.encoder.load_state_dict(torch.load(args.load_bt_checkpoint)["encoder"])
-    optimizer = torch.optim.Adam(model.parameters(), lr=args.learning_rate)
+    model = Unet(dropout=args["dropout"], hidden_channels=unet_layers).to(device)
+    if load_encoder_weights:
+        model.encoder.load_state_dict(torch.load(load_encoder_weights))
+    elif load_bt_checkpoint:
+        model.encoder.load_state_dict(torch.load(load_bt_checkpoint)["encoder"])
+    optimizer = torch.optim.Adam(model.parameters(), lr=args["learning_rate"])
 
     # Define scheduler (if necessary)
     scheduler = None
-    if args.scheduler[0] == 'CosineAnnealing':
-        scheduler = torch.optim.lr_scheduler.CosineAnnealingLR(optimizer, args.anneal_tmax, args.anneal_eta)
-    elif args.scheduler[0] == 'ReduceOnPlateau':
+    if args["scheduler"] == 'CosineAnnealing':
+        scheduler = torch.optim.lr_scheduler.CosineAnnealingLR(optimizer, anneal_tmax, anneal_eta)
+    elif args["scheduler"] == 'ReduceOnPlateau':
         scheduler = torch.optim.lr_scheduler.ReduceLROnPlateau(optimizer)
 
     # Select the Loss function
@@ -136,47 +135,58 @@ if __name__ == '__main__':
         "DiceLoss": DiceLoss(),
         "DiceBCELoss": DiceBCELoss()
     }
-    criterion = loss_functions[args.loss_function[0]]
+    criterion = loss_functions[args["loss_function"]]
 
     # Load the training datasets
-    training_path = os.path.join(args.rootdir, "Training")
+    training_path = os.path.join(rootdir, "Training")
     training_file_basenames = os.listdir(os.path.join(training_path, "images"))
     training_dataset = RetinaSegmentationDataset(training_path, training_file_basenames)
     training_dataloader = torch.utils.data.DataLoader(
-            training_dataset, batch_size=args.batch_size, num_workers=args.workers,
-            pin_memory=True, shuffle=True)
+        training_dataset, batch_size=args["batch_size"], num_workers=workers,
+        pin_memory=True, shuffle=True)
 
     # Load the validation datasets
-    validation_path = os.path.join(args.rootdir, "Validation")
+    validation_path = os.path.join(rootdir, "Validation")
     validation_file_basenames = os.listdir(os.path.join(validation_path, "images"))
     validation_dataset = RetinaSegmentationDataset(validation_path, validation_file_basenames)
     validation_dataloader = torch.utils.data.DataLoader(
-            validation_dataset, batch_size=args.batch_size, num_workers=args.workers,
-            pin_memory=True, shuffle=False)
-    
+        validation_dataset, batch_size=args["batch_size"], num_workers=workers,
+        pin_memory=True, shuffle=False)
+
+    # Load the validation datasets
+    test_path = os.path.join(rootdir, "Testing")
+    test_file_basenames = os.listdir(os.path.join(test_path, "images"))
+    test_dataset = RetinaSegmentationDataset(test_path, test_file_basenames)
+    test_dataloader = torch.utils.data.DataLoader(
+        test_dataset, batch_size=1, num_workers=1,
+        pin_memory=True, shuffle=False)
+
     # Train / Val loop
     training_losses = []
     validation_losses = []
 
     # Create a descriptive name for the checkpoints
-    temp_dict = dict(args._get_kwargs())
+    temp_dict = dict(args)
     descrip_name = ""
     for key in temp_dict.keys():
         if (key != "rootdir" and
-            "load" not in key and
-            "checkpoint" not in key and
-            "workers" not in key and
-            "save_freq" not in key):
+                "load" not in key and
+                "checkpoint" not in key and
+                "workers" not in key and
+                "save_freq" not in key):
             descrip_name += "--" + key + "=" + str(temp_dict[key])
     descrip_name = descrip_name.replace(' ', '_').replace('[', '').replace(']', '').replace('\'', '')
 
     # runs dict should be passed to each instance of a results printer. It is only appended to so should be thread safe.
     runs: Dict[str, Dict[str, float]] = {}
     # create a new results printer for each param setting tested
-    result_printer = ResultPrinter(descrip_name, runs, run_name=args.run_name)
+    result_printer = ResultPrinter(descrip_name, runs, run_name=run_name)
 
-    epoch_pbar = tqdm(total=args.epochs, desc="Epochs")
-    for i in range(args.epochs):
+    epoch_pbar = tqdm(total=args["epochs"], desc="Epochs")
+
+    prev_validation_loss = None
+
+    for i in range(args["epochs"]):
 
         train_metrics = train_model(model, training_dataloader, criterion, optimizer, device)
         result_printer.print(f'Training metrics: {str(train_metrics)}')
@@ -201,18 +211,26 @@ if __name__ == '__main__':
         result_printer.makePlots(training_losses, validation_losses, i)
 
         # Take appropriate scheduler step (if necessary)
-        if args.scheduler[0] == 'CosineAnnealing':
+        if args["scheduler"] == 'CosineAnnealing':
             scheduler.step()
-        elif args.scheduler[0] == 'ReduceOnPlateau':
+        elif args["scheduler"] == 'ReduceOnPlateau':
             scheduler.step(validation_loss)
 
-        if i % args.save_freq == 0:
-            # save the model
-            state = dict(epoch=i + 1,
-                         model=model.state_dict(),
-                         optimizer=optimizer.state_dict(),
-                         unet_layer_sizes=unet_layers,
-                         args=temp_dict)
-            torch.save(state, args.checkpoint_dir / f'unet{descrip_name}.pth')
+        if prev_validation_loss is not None:
+            if abs(prev_validation_loss - validation_loss) / prev_validation_loss < 0.01:
+                break
+
+        # if i % args.save_freq == 0:
+        # save the model
+        state = dict(epoch=i + 1,
+                     model=model.state_dict(),
+                     optimizer=optimizer.state_dict(),
+                     unet_layer_sizes=unet_layers,
+                     args=temp_dict)
+        torch.save(state, checkpoint_dir / f'unet{descrip_name}.pth')
+
+        prev_validation_loss = validation_loss
+
+    predict_model(model, test_dataloader, device)
 
     result_printer.close()
