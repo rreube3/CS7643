@@ -44,7 +44,7 @@ class ResultPrinter:
         self.runs[self.param_label] = validation_metrics
         # sort_by lowest validation loss
         with open(f"{self.base_path}ranked_results.txt", "w") as rank_file:
-            for out in sorted(self.runs.items(), key=lambda x: x[1]['f1_score'], reverse=True):  # add key
+            for out in sorted(self.runs.items(), key=lambda x: x[1]['f1_score'], reverse=True):
                 rank_file.write(str(out) + '\n')
 
     def makePlots(self, training_losses: List[float], validation_losses: List[float], epoch: int):
@@ -56,12 +56,12 @@ class ResultPrinter:
         :param epoch:
         :return:
         """
-        plt.clf()
-        plt.plot(range(len(training_losses)),training_losses,'r')
-        plt.plot(range(len(validation_losses)),validation_losses,'b')
-        plt.legend(['Training Loss','Validation Loss'])
-        plt.title('Training and Validation Loss for Unet')
-        plt.savefig(f"{self.run_path}plot{epoch}.txt")
+        # plt.close()
+        # plt.plot(range(len(training_losses)),training_losses,'r')
+        # plt.plot(range(len(validation_losses)),validation_losses,'b')
+        # plt.legend(['Training Loss','Validation Loss'])
+        # plt.title('Training and Validation Loss for Unet')
+        # plt.savefig(f"{self.run_path}plot{epoch}.png")
         # write loss arrays to outfile
         self.print(f"training loss per epoch: {str(training_losses)}")
         self.print(f"validation loss per epoch: {str(validation_losses)}")
