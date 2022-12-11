@@ -8,15 +8,16 @@ from typing import List, Tuple
 
 from img_transform.transforms import EyeMaskCustomTransform, EyeDatasetCustomTransform
 
-
 IMG_TRANSFORMS = transforms.Compose([
     transforms.ToTensor(),
+    torch.nn.ConstantPad2d((0, 75, 0, 56), 0),
     EyeDatasetCustomTransform(mask_threshold=0.25),
 ])
 
 
 LBL_TRANSFORMS = transforms.Compose([
     transforms.ToTensor(),
+    torch.nn.ConstantPad2d((0, 75, 0, 56), 0),
     EyeMaskCustomTransform(mask_threshold=0.25),
 ])
 
