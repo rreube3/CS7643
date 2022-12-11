@@ -6,6 +6,7 @@ from pathlib import Path
 import matplotlib.pyplot as plt
 #from tqdm import tqdm
 
+from model.metrics import Metrics
 #from model.metrics import Metrics
 from model.unet import Unet, DEFAULT_UNET_LAYERS
 from model.dice_loss import DiceLoss, DiceBCELoss
@@ -146,8 +147,9 @@ if __name__ == '__main__':
 
 
         for i in range(0,args.epochs):
-            #Training
-            #metrics_tracker = Metrics(device)
+
+            metrics_tracker = Metrics(device)
+
             model.train()
             train_running_loss = 0.0
             for ind, (img, lbl) in enumerate(trainloader):
@@ -156,18 +158,20 @@ if __name__ == '__main__':
                 lbl_pred = model(img)
                 optimizer.zero_grad()
                 loss = criterion(lbl_pred, lbl)
-                #metrics_tracker.calculate(lbl_pred, lbl)
+
+                # compute metrics
+                metrics_tracker.calculate(lbl_pred, lbl)
+
                 train_running_loss += loss.item() * img.shape[0]
                 loss.backward()
                 optimizer.step()
                 train_running_loss += loss.item()*img.shape[0]
             train_loss = train_running_loss / (ind + 1)
-            #train_metrics = metrics_tracker.get_mean_metrics(ind + 1)
-            #train_metrics['loss'] = train_loss
-#            result_printer.print(f'Training metrics: {str(train_metrics)}')
+            # Compute the metrics for this epoch
+            train_metrics = metrics_tracker.get_mean_metrics(ind + 1)
+            train_metrics['loss'] = train_loss
 
-            #Validation
-            #metrics_tracker = Metrics(device)
+            metrics_tracker = Metrics(device)
             model.eval()
             eval_running_loss = 0.0
             with torch.no_grad():
@@ -176,17 +180,18 @@ if __name__ == '__main__':
                     lbl = lbl.to(device)
                     lbl_pred = model(img)
                     loss = criterion(lbl_pred, lbl)
-                    #metrics_tracker.calculate(lbl_pred, lbl)
+                    # compute metrics
+                    metrics_tracker.calculate(lbl_pred, lbl)
                     eval_running_loss += loss.item() * img.shape[0]
-            valid_loss = eval_running_loss / (ind + 1)
-            #validation_metrics = metrics_tracker.get_mean_metrics(ind + 1)
-            #validation_metrics['loss'] = valid_loss
-            #result_printer.print(f'Validation metrics: {str(validation_metrics)}')
-            #result_printer.rankAndSave(validation_metrics)
+                valid_loss = eval_running_loss / (ind + 1)
+                # Compute the metrics for this epoch
+                valid_metrics = metrics_tracker.get_mean_metrics(ind + 1)
+                valid_metrics['loss'] = valid_loss
+
 
             print('Fold = ',fold+1, ', Epoch = ',i+1, \
-                   'Training Loss = ',train_loss, \
-                   'Validation_loss= ',valid_loss)
+                   'Training Metrics = ',train_metrics, \
+                   'Validation Metrics= ',valid_metrics)
             training_losses[i][fold] = train_loss
             validation_losses[i][fold] = valid_loss
 
