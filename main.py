@@ -13,7 +13,6 @@ from model.dice_loss import DiceLoss, DiceBCELoss
 from datasets.dataset import RetinaSegmentationDataset
 from utils.resultPrinter import ResultPrinter
 
-
 def train_model(model, dataloader, criterion, optimizer, device):
     metrics_tracker = Metrics(device)
     model.train()
