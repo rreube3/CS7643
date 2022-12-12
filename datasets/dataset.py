@@ -10,14 +10,14 @@ from img_transform.transforms import EyeMaskCustomTransform, EyeDatasetCustomTra
 
 IMG_TRANSFORMS = transforms.Compose([
     transforms.ToTensor(),
-    torch.nn.ConstantPad2d((0, 75, 0, 56), 0),
+    # torch.nn.ConstantPad2d((0, 75, 0, 56), 0),
     EyeDatasetCustomTransform(mask_threshold=0.25),
 ])
 
 
 LBL_TRANSFORMS = transforms.Compose([
     transforms.ToTensor(),
-    torch.nn.ConstantPad2d((0, 75, 0, 56), 0),
+    # torch.nn.ConstantPad2d((0, 75, 0, 56), 0),
     EyeMaskCustomTransform(mask_threshold=0.25),
 ])
 
