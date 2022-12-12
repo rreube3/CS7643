@@ -18,7 +18,7 @@ import torch
 import torchvision
 import torchvision.transforms as transforms
 
-from model.unet import Unet
+from model.unet import Unet, DEFAULT_UNET_LAYERS
 from img_transform.transform_wrapper import TorchTransformWrapper
 from img_transform.transforms import EyeDatasetCustomTransform
 import pickle
@@ -89,11 +89,6 @@ def main_worker(gpu, args):
     if args.unet_layers:
         unet_layers = [int(x) for x in args.unet_layers.split("-")]
 
-    # Determine the layer sizes of the U-Net
-    unet_layers = DEFAULT_UNET_LAYERS
-    if args.unet_layers:
-        unet_layers = [int(x) for x in args.unet_layers.split("-")]
-
     # Initialize the model on the GPU
     unet = Unet(dropout=args.dropout, hidden_channels=unet_layers)
     model = BarlowTwins(args, unet).cuda(gpu)
@@ -133,6 +128,7 @@ def main_worker(gpu, args):
 
     start_time = time.time()
     scaler = torch.cuda.amp.GradScaler()
+    
     for epoch in range(start_epoch, args.epochs):
         for step, ((y1, y2), _) in enumerate(loader, start=epoch * len(loader)):
             y1 = y1.cuda(gpu, non_blocking=True)
@@ -157,6 +153,7 @@ def main_worker(gpu, args):
                              unet_layer_sizes=unet_layers,
                              args=dict(args._get_kwargs()))
                 torch.save(state, args.checkpoint_dir / 'checkpoint.pth')
+
         # save model
         torch.save(state,
                    args.checkpoint_dir / f'{epoch}unetEncoder.pth')
@@ -192,7 +189,9 @@ class BarlowTwins(nn.Module):
         self.encoder = unet_model.encoder
 
         # projector
-        sizes = [65536] + list(map(int, args.projector.split('-')))
+        # NOTE: WE ARE CALCULATING THE OUTPUT SIZE OF THE FLATTENED UNET ENCODER LAYER
+        # AND EXPECTING THAT FRIST, OTHERWISE THIS WILL DIE DUE TO DIMENSION MISMATCH!
+        sizes = list(map(int, args.projector.split('-')))
         layers = [nn.Flatten()]  # added flatten
         for i in range(len(sizes) - 2):
             layers.append(nn.Linear(sizes[i], sizes[i + 1], bias=False))
