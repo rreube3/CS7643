@@ -10,6 +10,7 @@ from img_transform.transforms import EyeMaskCustomTransform, EyeDatasetCustomTra
 
 IMG_TRANSFORMS = transforms.Compose([
     transforms.ToTensor(),
+    # uncomment when running k-folds
     # torch.nn.ConstantPad2d((0, 75, 0, 56), 0),
     EyeDatasetCustomTransform(mask_threshold=0.25),
 ])
@@ -17,6 +18,7 @@ IMG_TRANSFORMS = transforms.Compose([
 
 LBL_TRANSFORMS = transforms.Compose([
     transforms.ToTensor(),
+    # uncomment when running k-folds
     # torch.nn.ConstantPad2d((0, 75, 0, 56), 0),
     EyeMaskCustomTransform(mask_threshold=0.25),
 ])
