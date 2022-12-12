@@ -168,7 +168,7 @@ if __name__ == '__main__':
 
 
             print('Fold = ',fold+1, ', Epoch = ',i+1, \
-                   #'Training Metrics = ',train_metrics, \
+                   'Training Metrics = ',train_metrics, \
                    'Validation Metrics= ',valid_metrics)
             training_losses[i][fold] = train_loss
             validation_losses[i][fold] = valid_loss
