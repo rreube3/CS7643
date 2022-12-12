@@ -1,17 +1,14 @@
 import argparse
 import torch
 import os
-#from typing import Dict
 from pathlib import Path
 import matplotlib.pyplot as plt
 #from tqdm import tqdm
 
 from model.metrics import Metrics
-#from model.metrics import Metrics
 from model.unet import Unet, DEFAULT_UNET_LAYERS
 from model.dice_loss import DiceLoss, DiceBCELoss
 from datasets.dataset import RetinaSegmentationDataset
-#from utils.resultPrinter import ResultPrinter
 
 #-------added the following-----------
 from matplotlib.ticker import MaxNLocator
@@ -96,25 +93,6 @@ if __name__ == '__main__':
     dataset = ConcatDataset([training_dataset, validation_dataset])
     kfold = KFold(n_splits=args.k_folds, shuffle=True)
 
-     # Create a descriptive name for the checkpoints
-#    temp_dict = dict(args._get_kwargs())
-#    descrip_name = ""
-#    for key in temp_dict.keys():
-#        if (key != "rootdir" and
-#            "load" not in key and
-#            "checkpoint" not in key and
-#            "workers" not in key and
-#            "save_freq" not in key):
-#            descrip_name += "--" + key + "=" + str(temp_dict[key])
-#    descrip_name = descrip_name.replace(' ', '_').replace('[', '').replace(']', '').replace('\'', '')
-
-    # runs dict should be passed to each instance of a results printer. 
-    #It is only appended to so should be thread safe.
-#    runs: Dict[str, Dict[str, float]] = {}
-    # create a new results printer for each param setting tested
-    #result_printer = ResultPrinter(descrip_name, runs, run_name=args.run_name)
-    #result_printer = ResultPrinter(descrip_name, runs, time_label=args.run_name)
-
     #Initialize arrays to hold training and validation losses to averate at the end
     training_losses = np.zeros((args.epochs,args.k_folds))
     validation_losses = np.zeros((args.epochs,args.k_folds))
@@ -190,12 +168,10 @@ if __name__ == '__main__':
 
 
             print('Fold = ',fold+1, ', Epoch = ',i+1, \
-                   'Training Metrics = ',train_metrics, \
+                   #'Training Metrics = ',train_metrics, \
                    'Validation Metrics= ',valid_metrics)
             training_losses[i][fold] = train_loss
             validation_losses[i][fold] = valid_loss
-
-#            result_printer.makePlots(training_losses, validation_losses, i)
 
             # Take appropriate scheduler step (if necessary)
             if args.scheduler[0] == 'CosineAnnealing':
@@ -203,24 +179,15 @@ if __name__ == '__main__':
             elif args.scheduler[0] == 'ReduceOnPlateau':
                 scheduler.step(valid_loss)
 
-#            if i % args.save_freq == 0:
-#                # save the model
-#                state = dict(fold = fold+1,
-#                         epoch=i + 1,
-#                         model=model.state_dict(),
-#                         optimizer=optimizer.state_dict(),
-#                         unet_layer_sizes=unet_layers,
-#                         args=temp_dict)
-#                torch.save(state, args.checkpoint_dir / f'unet{descrip_name}.pth')
-        break
+        #break
 
-    #T = np.array(training_losses).mean(axis=1)
-    #V = np.array(validation_losses).mean(axis=1)
-    T = np.array(training_losses).max(axis=1)
-    V = np.array(validation_losses).max(axis=1)
+    T = np.array(training_losses).mean(axis=1)
+    V = np.array(validation_losses).mean(axis=1)
+    #T = np.array(training_losses).max(axis=1)
+    #V = np.array(validation_losses).max(axis=1)
 
-    #for i in range(args.epochs):
-    for i in range(args.epochs-1,args.epochs):
+    for i in range(args.epochs):
+    #for i in range(args.epochs-1,args.epochs):
         plt.clf()
         ax = plt.figure().gca()
         ax.xaxis.set_major_locator(MaxNLocator(integer=True))
@@ -233,8 +200,5 @@ if __name__ == '__main__':
         plt.grid()
         cwd = os.getcwd().replace('\\','/')
         plt.savefig(cwd + '/plots/plot_' + str(args.k_folds) + 'folds_' + str(i+1) + 'epochs' + '.png')
-        #result_printer.makePlots(T[0:i+1], V[0:i+1], i)
-
-#    result_printer.close()
 
 
