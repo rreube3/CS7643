@@ -3,11 +3,12 @@ import torch
 from typing import Dict, List
 
 
-DEFAULT_LOSS_WEIGHTS = np.array([1, 1, 1, 1, 10, 10, 10, 10])
+DEFAULT_LOSS_WEIGHTS = np.array([1, 1, 1, 1, 20, 10])
 
 
-def weighted_feature_matching_loss(y_true, fake_samples, image_input, real_samples, D, inner_weight, 
-                          sample_weight):
+def weighted_feature_matching_loss(
+    y_true, fake_samples, image_input, real_samples, D, inner_weight, sample_weight
+):
     y_fake = D([image_input, fake_samples])[1:]
     y_real = D([image_input, real_samples])[1:]
 
@@ -30,10 +31,8 @@ class RVGANLoss:
         self.down_inner_weight = (1 - inner_weight)
         self.hinge_loss_1 = torch.nn.HingeEmbeddingLoss()
         self.hinge_loss_2 = torch.nn.HingeEmbeddingLoss()
-        self.hinge_loss_3 = torch.nn.HingeEmbeddingLoss()
-        self.hinge_loss_4 = torch.nn.HingeEmbeddingLoss()
-        self.mse_1 = torch.nn.MSELoss()
-        self.mse_2 = torch.nn.MSELoss()
+        self.mse_loss_1 = torch.nn.MSELoss()
+        self.mse_loss_2 = torch.nn.MSELoss()
         
     def compute_feature_loss(self,
                              real_discriminator_features: List,
@@ -68,21 +67,13 @@ class RVGANLoss:
             model_output_dict["Real"]["Fine Discriminator Features"],
             model_output_dict["Fake"]["Fine Discriminator Features"]
         ) * self.loss_weights[3]
-        total_rvgan_loss += self.hinge_loss_3(
-            model_output_dict["Fake"]["Coarse Discriminator Out"],
+        total_rvgan_loss += self.mse_loss_1(
+            model_output_dict["Coarse Generator Out"],
             model_output_dict["Vessel Labels"]["Coarse"]
         ).sum() * self.loss_weights[4]
-        total_rvgan_loss += self.hinge_loss_4(
-            model_output_dict["Fake"]["Fine Discriminator Out"],
+        total_rvgan_loss += self.mse_loss_2(
+            model_output_dict["Fine Generator Out"],
             model_output_dict["Vessel Labels"]["Fine"]
         ).sum() * self.loss_weights[5]
-        total_rvgan_loss += self.mse_1(
-            model_output_dict["Fake"]["Coarse Discriminator Out"],
-            model_output_dict["Vessel Labels"]["Coarse"]
-        ).sum() * self.loss_weights[6]
-        total_rvgan_loss += self.mse_2(
-            model_output_dict["Fake"]["Fine Discriminator Out"],
-            model_output_dict["Vessel Labels"]["Fine"]
-        ).sum() * self.loss_weights[7]
 
         return total_rvgan_loss
