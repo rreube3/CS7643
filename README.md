@@ -4,6 +4,14 @@
 
 https://mega.nz/file/yaZlGL6D#l2_lojZHcMVXZelzbERsXzLVxl6cy-ElY5sRyWXkRP4
 
+## Project Github
+
+https://github.com/rreube3/CS7643
+
+## Project Data sets
+
+https://drive.google.com/drive/folders/1dWarjwIlJfHhkVU1BICBT8IPl4iPpKvv?usp=share_link
+
 ## Git workflow
 
 1. pull main
