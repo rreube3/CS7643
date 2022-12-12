@@ -20,6 +20,10 @@ from torchvision import transforms
 from sklearn.model_selection import KFold
 #-----------
 
+#Referenced the following works when preparing this script
+#Christain Versloot, https://github.com/christianversloot/machine-learning-articles/blob/main/how-to-use-k-fold-cross-validation-with-pytorch.md
+
+
 import warnings
 warnings.filterwarnings('ignore')
 
