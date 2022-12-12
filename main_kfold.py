@@ -3,9 +3,9 @@ import torch
 import os
 from pathlib import Path
 import matplotlib.pyplot as plt
-from tqdm import tqdm
+#from tqdm import tqdm
 
-#from model.metrics import Metrics
+from model.metrics import Metrics
 from model.unet import Unet, DEFAULT_UNET_LAYERS
 from model.dice_loss import DiceLoss, DiceBCELoss
 from datasets.dataset import RetinaSegmentationDataset
@@ -20,11 +20,12 @@ from torchvision import transforms
 from sklearn.model_selection import KFold
 #-----------
 
+#Referenced the following works when preparing this script
+#Christain Versloot, https://github.com/christianversloot/machine-learning-articles/blob/main/how-to-use-k-fold-cross-validation-with-pytorch.md
+
+
 import warnings
 warnings.filterwarnings('ignore')
-
-#Sample Run Script
-#python main_kfold.py --rootdir ../DATA/DATA_4D_Patches --loss-function DiceBCELoss --unet-layers 16-32-64 --workers 4 --batch-size 8 --epochs 5 --k_folds 5
 
 if __name__ == '__main__':
     parser = argparse.ArgumentParser(description="Trainer")
@@ -56,9 +57,12 @@ if __name__ == '__main__':
                         help='Cosine Annealing: Maximum number of iterations for cosine annealing')
     parser.add_argument('--anneal_eta', default=0, type=float,
                         help='Cosine Annealing: Minimum learning rate. Default: 0')
-    parser.add_argument('--k_folds', default=1, type=int,
-                        help='k-fold cross-validation. Default: 1')
+    parser.add_argument('--run-name', default=None, type=str,
+                        help='Run Name')
+    parser.add_argument('--k_folds', default=2, type=int,
+                        help='k-fold cross-validation k>1. Default: 2')
     args = parser.parse_args()
+
 
     # Get the device
     device = "cpu"
@@ -70,20 +74,9 @@ if __name__ == '__main__':
     if args.unet_layers:
         unet_layers = [int(x) for x in args.unet_layers.split("-")]
 
-    # Initialize the model on the GPU
-    #model = Unet(dropout=args.dropout, hidden_channels=unet_layers).to(device)
-    #if args.load_encoder_weights:
-    #    model.encoder.load_state_dict(torch.load(args.load_encoder_weights))
-    #elif args.load_bt_checkpoint:
-    #    model.encoder.load_state_dict(torch.load(args.load_bt_checkpoint)["encoder"])
-    #optimizer = torch.optim.Adam(model.parameters(), lr=args.learning_rate)
 
     # Define scheduler (if necessary)
     scheduler = None
-    if args.scheduler[0] == 'CosineAnnealing':
-        scheduler = torch.optim.lr_scheduler.CosineAnnealingLR(optimizer, args.anneal_tmax, args.anneal_eta)
-    elif args.scheduler[0] == 'ReduceOnPlateau':
-        scheduler = torch.optim.lr_scheduler.ReduceLROnPlateau(optimizer)
 
     # Select the Loss function
     loss_functions = {
@@ -100,7 +93,7 @@ if __name__ == '__main__':
     training_dataset = RetinaSegmentationDataset(training_path, training_file_basenames)
     validation_path = os.path.join(args.rootdir, "Validation")
     validation_file_basenames = os.listdir(os.path.join(validation_path, "images"))
-    validation_dataset = RetinaSegmentationDataset(validation_path, validation_file_basenames)
+    validation_dataset = RetinaSegmentationDataset(validation_path,validation_file_basenames)
     dataset = ConcatDataset([training_dataset, validation_dataset])
     kfold = KFold(n_splits=args.k_folds, shuffle=True)
 
@@ -122,9 +115,23 @@ if __name__ == '__main__':
                       sampler=validation_subsampler)
 
         model = Unet(dropout=args.dropout, hidden_channels=unet_layers).to(device)
+#        if args.load_encoder_weights:
+#            model.encoder.load_state_dict(torch.load(args.load_encoder_weights))
+#        elif args.load_bt_checkpoint:
+#            model.encoder.load_state_dict(torch.load(args.load_bt_checkpoint)["encoder"])
+
         optimizer = torch.optim.Adam(model.parameters(), lr=args.learning_rate)
+        if args.scheduler[0] == 'CosineAnnealing':
+            scheduler = torch.optim.lr_scheduler.CosineAnnealingLR(optimizer, \
+                            args.anneal_tmax, args.anneal_eta)
+        elif args.scheduler[0] == 'ReduceOnPlateau':
+            scheduler = torch.optim.lr_scheduler.ReduceLROnPlateau(optimizer)
+
 
         for i in range(0,args.epochs):
+
+            metrics_tracker = Metrics(device)
+
             model.train()
             train_running_loss = 0.0
             for ind, (img, lbl) in enumerate(trainloader):
@@ -133,12 +140,20 @@ if __name__ == '__main__':
                 lbl_pred = model(img)
                 optimizer.zero_grad()
                 loss = criterion(lbl_pred, lbl)
+
+                # compute metrics
+                metrics_tracker.calculate(lbl_pred, lbl)
+
                 train_running_loss += loss.item() * img.shape[0]
                 loss.backward()
                 optimizer.step()
                 train_running_loss += loss.item()*img.shape[0]
             train_loss = train_running_loss / (ind + 1)
+            # Compute the metrics for this epoch
+            train_metrics = metrics_tracker.get_mean_metrics(ind + 1)
+            train_metrics['loss'] = train_loss
 
+            metrics_tracker = Metrics(device)
             model.eval()
             eval_running_loss = 0.0
             with torch.no_grad():
@@ -147,12 +162,18 @@ if __name__ == '__main__':
                     lbl = lbl.to(device)
                     lbl_pred = model(img)
                     loss = criterion(lbl_pred, lbl)
+                    # compute metrics
+                    metrics_tracker.calculate(lbl_pred, lbl)
                     eval_running_loss += loss.item() * img.shape[0]
                 valid_loss = eval_running_loss / (ind + 1)
+                # Compute the metrics for this epoch
+                valid_metrics = metrics_tracker.get_mean_metrics(ind + 1)
+                valid_metrics['loss'] = valid_loss
+
 
             print('Fold = ',fold+1, ', Epoch = ',i+1, \
-                   'Training Loss = ',train_loss, \
-                   'Validation_loss= ',valid_loss)
+                   'Training Metrics = ',train_metrics, \
+                   'Validation Metrics= ',valid_metrics)
             training_losses[i][fold] = train_loss
             validation_losses[i][fold] = valid_loss
 
@@ -162,22 +183,26 @@ if __name__ == '__main__':
             elif args.scheduler[0] == 'ReduceOnPlateau':
                 scheduler.step(valid_loss)
 
+        #break
+
     T = np.array(training_losses).mean(axis=1)
     V = np.array(validation_losses).mean(axis=1)
+    #T = np.array(training_losses).max(axis=1)
+    #V = np.array(validation_losses).max(axis=1)
 
     for i in range(args.epochs):
+    #for i in range(args.epochs-1,args.epochs):
         plt.clf()
         ax = plt.figure().gca()
         ax.xaxis.set_major_locator(MaxNLocator(integer=True))
         plt.plot(range(1,i+2),T[0:i+1],'r')
         plt.plot(range(1,i+2),V[0:i+1],'b') 
         plt.legend(['Training Loss','Validation Loss'])
-        plt.title('K-Fold Cross-Validation for Unet')
+        plt.title('K-Fold Cross-Validation for Unet, K='+str(args.k_folds))
         plt.xlabel('Epochs')
         plt.ylabel('Loss')
         plt.grid()
         cwd = os.getcwd().replace('\\','/')
         plt.savefig(cwd + '/plots/plot_' + str(args.k_folds) + 'folds_' + str(i+1) + 'epochs' + '.png')
-
 
 
