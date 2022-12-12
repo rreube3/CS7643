@@ -11,6 +11,7 @@ from model.metrics import Metrics
 from model.rvgan import RVGAN
 from losses.losses import RVGANLoss
 from datasets.dataset import RetinaSegmentationDataset
+from model.dice_loss import DiceLoss
 
 
 def train_model(
@@ -23,6 +24,8 @@ def train_model(
     metrics_tracker = Metrics(device)
     train_running_loss = 0.0    
     for ind, (img, lbl) in enumerate(tqdm(dataloader, desc="Training")):
+        torch.cuda.empty_cache()
+        
         # Copy to device
         img = img.to(device)
         lbl = lbl.to(device)
@@ -30,7 +33,7 @@ def train_model(
         decimated_shape = [int(d / model.decimination_factor) for d in img.shape[2:]]
         resizer = Resize(size=decimated_shape)
         decimated_img = resizer(img)
-        decimated_lbl = resizer(lbl)
+        decimated_lbl = torch.round(resizer(lbl))  # Make sure values are 0 or 1
 
         # Train only the discriminator
         model.eval()
@@ -79,8 +82,10 @@ def train_model(
         model.generators.fine_generator.eval()
 
         optimizers["Coarse_Generator"].zero_grad()
-        pred_decimated_vessels = model.generators.coarse_generator(decimated_img)
-        g_global_loss = torch.nn.MSELoss()(pred_decimated_vessels, decimated_lbl)
+        pred_decimated_vessels = model.generators.coarse_generator(
+            decimated_img, apply_activation=False
+        )
+        g_global_loss = DiceLoss()(pred_decimated_vessels, decimated_lbl)
         g_global_loss.backward()
         optimizers["Coarse_Generator"].step()
 
@@ -92,8 +97,10 @@ def train_model(
         model.generators.fine_generator.train()
 
         optimizers["Fine_Generator"].zero_grad()
-        _, pred_vessels = model.generators(img, decimated_x=decimated_img)
-        g_local_loss = torch.nn.MSELoss()(pred_vessels, lbl)
+        _, pred_vessels = model.generators(
+            img, decimated_x=decimated_img, apply_activation=False
+        )
+        g_local_loss = DiceLoss()(pred_vessels, lbl)
         g_local_loss.backward()
         optimizers["Fine_Generator"].step()
 
@@ -107,17 +114,17 @@ def train_model(
         model.fine_discriminator.train()
         model.generators.coarse_generator.eval()
         model.generators.fine_generator.eval()
+        optimizers["RVGAN"].zero_grad()
         # Make the prediction
         output_dict = model(img, vessel_labels=lbl)
-        optimizers["RVGAN"].zero_grad()
         # Compute loss
         train_running_loss = criterion.compute_rvgan_loss(output_dict)
+        # Backward step
+        train_running_loss.backward()
         # compute metrics
         metrics_tracker.calculate(output_dict["Fine Generator Out"], lbl)
         # Running tally
         train_running_loss += train_running_loss * img.shape[0]
-        # Backward step
-        train_running_loss.backward()
         optimizers["RVGAN"].step()
 
     # Compute the loss for this epoch
@@ -172,10 +179,6 @@ if __name__ == '__main__':
     parser.add_argument('--save-freq', default=1, type=int,
                         metavar='N', help='How frequent to save')
     #parser.add_argument('--dropout', default=0.2, type=float, help='dropout percent used in Unet Encoder')
-    #parser.add_argument('--anneal_tmax', default=10, type=int,
-    #                    help='Cosine Annealing: Maximum number of iterations for cosine annealing')
-    #parser.add_argument('--anneal_eta', default=0, type=float,
-    #                    help='Cosine Annealing: Minimum learning rate. Default: 0')
     
     args = parser.parse_args()
 
@@ -183,13 +186,6 @@ if __name__ == '__main__':
     device = "cpu"
     if torch.cuda.is_available():
         device = "cuda:0"
-
-    """
-    # Determine the layer sizes of the U-Net
-    unet_layers = DEFAULT_UNET_LAYERS
-    if args.unet_layers:
-        unet_layers = [int(x) for x in args.unet_layers.split("-")]
-    """
 
     # Initialize the model on the GPU
     model = RVGAN(num_channels_in=4).to(device)
@@ -216,15 +212,6 @@ if __name__ == '__main__':
             model.parameters(), lr=0.0002, betas=[0.5, 0.999]
         )
     }
-
-    """
-    # Define scheduler (if necessary)
-    scheduler = None
-    if args.scheduler[0] == 'CosineAnnealing':
-        scheduler = torch.optim.lr_scheduler.CosineAnnealingLR(optimizer, args.anneal_tmax, args.anneal_eta)
-    elif args.scheduler[0] == 'ReduceOnPlateau':
-        scheduler = torch.optim.lr_scheduler.ReduceLROnPlateau(optimizer)
-    """
 
     # Load the training datasets
     training_path = os.path.join(args.rootdir, "Training")
@@ -278,14 +265,6 @@ if __name__ == '__main__':
         plt.legend(['Training Loss','Validation Loss'])
         plt.title('Training and Validation Loss for Unet')
         plt.savefig('plot' + str(i) + '.png')
-
-        """
-        # Take appropriate scheduler step (if necessary)
-        if args.scheduler[0] == 'CosineAnnealing':
-            scheduler.step()
-        elif args.scheduler[0] == 'ReduceOnPlateau':
-            scheduler.step(validation_loss)
-        """
 
         if i % args.save_freq == 0:
             # save the model

@@ -256,11 +256,12 @@ class Generator(nn.Module):
                                 num_channels_out,
                                 kernel_size=(7, 7),
                                 padding="valid")
-        self.activation = nn.Tanh()
+        self.activation = nn.Sigmoid()
 
     def forward(self,
                 x: torch.Tensor,
-                residual_skip_connection: torch.Tensor = None) -> torch.Tensor:
+                residual_skip_connection: torch.Tensor = None,
+                apply_activation: bool = True) -> torch.Tensor:
         x_head = self.leaky_1(self.batch_1(self.conv_1(self.reflection_padding_1(x))))
         
         # The output x_head is one of the skip connections
@@ -288,7 +289,10 @@ class Generator(nn.Module):
             cur_x = decoder(cur_x)
             cur_x = cur_x + skip_connection
         # Run through the head
-        cur_x = self.activation(self.conv_2(self.reflection_padding_2(cur_x)))
+        cur_x = self.conv_2(self.reflection_padding_2(cur_x))
+
+        if apply_activation:
+            cur_x = self.activation(cur_x)
 
         return cur_x
 
@@ -416,7 +420,8 @@ class CoarseAndFineGenerators(nn.Module):
 
     def forward(self,
                 x: torch.Tensor,
-                decimated_x: torch.Tensor = None
+                decimated_x: torch.Tensor = None,
+                apply_activation: bool = True
         ) -> Tuple[torch.Tensor, torch.Tensor]:
 
         # Create the decimated image for the coarse
@@ -426,9 +431,13 @@ class CoarseAndFineGenerators(nn.Module):
             decimated_x = resizer(x)
 
         # Run the generators
-        coarse_generator_out = self.coarse_generator(decimated_x)
-        fine_generator_out = self.fine_generator(x,
-                                                 residual_skip_connection=coarse_generator_out)
+        coarse_generator_out = self.coarse_generator(decimated_x, apply_activation=apply_activation)
+        if apply_activation:
+            fine_generator_out = self.fine_generator(x,
+                                                     residual_skip_connection=coarse_generator_out)
+        else:
+            fine_generator_out = self.fine_generator(x,
+                                                     residual_skip_connection=self.coarse_generator.activation(coarse_generator_out))
         return coarse_generator_out, fine_generator_out
 
 
